@@ -113,6 +113,42 @@
   .gl-day{ font-weight:800; color:var(--teal); }
   .gl-meal{ color:var(--ink); }
   .legend{ font-size:11px; color:var(--muted); margin-top:10px; line-height:1.4; }
+  .dish{ color:var(--teal); font-weight:700; text-decoration:underline; text-decoration-style:dotted; text-underline-offset:2px; cursor:pointer; }
+
+  /* Glance v2 */
+  .gl2{ padding:8px 0 2px; border-top:1px solid var(--line); cursor:pointer; }
+  .gl2:first-child{ border-top:none; }
+  .gl2.today{ background:var(--teal-soft); margin:0 -14px; padding:8px 14px; }
+  .gl2-day{ font-size:12px; font-weight:800; color:var(--teal); margin-bottom:3px; }
+  .gl2-day .now{ font-size:10px; background:var(--teal); color:#fff; padding:1px 6px; border-radius:10px; margin-left:6px; }
+  .gl2-line{ font-size:12px; color:var(--ink); padding:2px 0; }
+  .gl2-line b{ color:var(--muted); font-weight:700; }
+
+  /* Recipe modal */
+  .rc-overlay{ display:none; position:fixed; inset:0; background:rgba(20,28,40,.5); z-index:50; align-items:flex-end; justify-content:center; }
+  .rc-overlay.show{ display:flex; }
+  .rc-card{ background:var(--card); width:100%; max-width:560px; max-height:88vh; overflow-y:auto; border-radius:16px 16px 0 0; padding:0 18px 28px; }
+  @media(min-width:560px){ .rc-overlay{ align-items:center; } .rc-card{ border-radius:16px; } }
+  .rc-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; position:sticky; top:0; background:var(--card); padding:16px 0 10px; border-bottom:1px solid var(--line); }
+  .rc-title{ font-size:17px; font-weight:800; }
+  .rc-sub{ font-size:12px; color:var(--teal); font-weight:700; margin-top:3px; }
+  .rc-x{ flex:none; border:none; background:var(--bg); width:32px; height:32px; border-radius:50%; font-size:14px; cursor:pointer; color:var(--muted); }
+  .rc-note{ font-size:12.5px; color:var(--ink); background:var(--teal-soft); border-radius:8px; padding:9px 11px; margin:12px 0 4px; }
+  .rc-h{ font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin:14px 0 6px; }
+  .rc-ing{ margin:0; padding-left:18px; } .rc-ing li{ font-size:13px; margin:4px 0; line-height:1.35; }
+  .rc-meth{ margin:0; padding-left:20px; } .rc-meth li{ font-size:13px; margin:7px 0; line-height:1.45; }
+
+  /* Prep tab */
+  .prep-intro{ font-size:12.5px; color:var(--muted); margin:4px 2px 4px; line-height:1.5; }
+  .prep-card{ background:var(--card); border:1px solid var(--line); border-radius:12px; margin:12px 0; overflow:hidden; }
+  .prep-head{ padding:12px 14px; font-weight:800; font-size:14px; background:var(--teal-soft); color:var(--teal); }
+  .prep-row{ padding:11px 14px; border-top:1px solid var(--line); font-size:13px; line-height:1.4; }
+  .prep-row:first-child{ border-top:none; }
+  .pr-t{ font-weight:700; }
+  .pr-d{ font-size:12px; color:var(--muted); margin-top:2px; }
+  .pr-time{ float:right; font-size:11px; color:var(--muted); font-weight:700; margin-left:8px; }
+  .step-num{ display:inline-flex; width:20px; height:20px; border-radius:50%; background:var(--teal); color:#fff; font-size:11px; font-weight:800; align-items:center; justify-content:center; margin-right:9px; vertical-align:middle; }
+  .rc-link{ font-size:11.5px; color:var(--teal); font-weight:700; margin-top:3px; cursor:pointer; }
 </style>
 </head>
 <body>
@@ -129,15 +165,17 @@
 </header>
 
 <div class="tabs">
-  <div class="tab active" id="tab-list" onclick="showTab('list')">Shopping</div>
-  <div class="tab" id="tab-plan" onclick="showTab('plan')">Meal Plan</div>
-  <div class="tab" id="tab-log" onclick="showTab('log')">Order Log</div>
+  <div class="tab active" id="tab-list" onclick="showTab('list')">Shop</div>
+  <div class="tab" id="tab-plan" onclick="showTab('plan')">Meals</div>
+  <div class="tab" id="tab-prep" onclick="showTab('prep')">Prep</div>
+  <div class="tab" id="tab-log" onclick="showTab('log')">Log</div>
 </div>
 
 <main>
   <div id="view-list"></div>
   <button class="addstore" onclick="addStore()">＋ Add section</button>
   <div id="view-plan" class="hidden"></div>
+  <div id="view-prep" class="hidden"></div>
   <div id="view-log" class="hidden"></div>
 
   <div class="toolbar">
@@ -149,6 +187,16 @@
   </div>
   <div class="footnote">In Edit mode you can add/delete items and sections, rename by tapping the text, and remove sections with 🗑. On iPad: Safari → Share → Add to Home Screen.</div>
 </main>
+
+<div id="recipeModal" class="rc-overlay" onclick="if(event.target===this)closeRecipe()">
+  <div class="rc-card">
+    <div class="rc-top">
+      <div><div class="rc-title"></div><div class="rc-sub"></div></div>
+      <button class="rc-x" onclick="closeRecipe()">✕</button>
+    </div>
+    <div class="rc-body"></div>
+  </div>
+</div>
 
 <script>
 /* ==== CONFIG: Supabase cloud sync ==== */
@@ -287,14 +335,16 @@ function addStore(){ const v=prompt('New section name (e.g. 🥩 Butcher):'); if
 function toggleEdit(){ editing=!editing; document.body.classList.toggle('editing',editing);
   document.getElementById('editBtn').textContent = editing?'✓ Done editing':'✏️ Edit list'; render(); }
 function showTab(t){
-  ['list','plan','log'].forEach(x=>{
+  ['list','plan','prep','log'].forEach(x=>{
     document.getElementById('tab-'+x).classList.toggle('active',t===x);
     document.getElementById('view-'+x).classList.toggle('hidden',t!==x);
   });
   document.querySelector('.addstore').classList.toggle('hidden',t!=='list');
   document.querySelectorAll('.toolbar').forEach(el=>el.classList.toggle('hidden',t!=='list'));
   if(t==='plan') renderPlan();
+  if(t==='prep') renderPrep();
 }
+function dishLink(name){ return `<span class="dish" onclick="event.stopPropagation();openRecipe('${name}')">${name}</span>`; }
 
 /* ===== Meal plan ===== */
 const PLAN_DAYS = [
@@ -319,12 +369,12 @@ function renderPlan(){
   const day = PLAN_DAYS[planDay];
   const rows = [
     {t:"7:00",  slot:"Ritual waters", both:"Warm lemon + turmeric-ginger + jeera water — all together on waking"},
-    {t:"7:30",  slot:"Meal 1 · Berry Sweet Smoothie", a:"150g Greek yogurt · 250ml milk · 180g berries · whey + collagen · saffron<br><b>~55g P / 430 kcal</b>", v:"150g Greek yogurt · 150ml milk · 120g berries · whey + collagen · saffron<br><b>~52g P / 360 kcal</b>"},
+    {t:"7:30",  slot:"Meal 1 · "+dishLink("Berry Sweet Smoothie"), a:"250ml milk · 180g berries · whey + collagen · saffron<br><b>~55g P / 430 kcal</b>", v:"150ml milk · 120g berries · whey + collagen · saffron<br><b>~52g P / 360 kcal</b>"},
     {t:"10:30", slot:"Meal 2 · Coffee + nuts", a:"Coffee (skim, stevia) + 8 almonds<br><b>~3g P / 90 kcal</b>", v:"Coffee (skim, stevia) + 3 walnut halves<br><b>~3g P / 70 kcal</b>"},
-    {t:"12:30", slot:"Meal 3 · Lunch", a:day.aLunch+pg(day.aLunch)+"<br><b>~38g P / 520 kcal</b>", v:"Mexican Burrito Bowl (constant)<br><b>~33g P / 430 kcal</b>"},
+    {t:"12:30", slot:"Meal 3 · Lunch", a:dishLink(day.aLunch)+pg(day.aLunch)+"<br><b>~38g P / 520 kcal</b>", v:dishLink("Mexican Burrito Bowl")+" (constant)<br><b>~33g P / 430 kcal</b>"},
     {t:"4:30",  slot:"Workout", both:"Training block"},
     {t:"5:30",  slot:"Meal 4 · Post-workout", a:"1 coconut water + 8 nuts<br><b>~4g P / 110 kcal</b>", v:"1 coconut water + 6 almonds<br><b>~4g P / 90 kcal</b>"},
-    {t:"7:30",  slot:"Meal 5 · Dinner (shared)", a:day.dinner+pg(day.dinner)+"<br><b>~44g P / 560 kcal</b>", v:day.dinner+"<br><b>~40g P / 420 kcal</b>"},
+    {t:"7:30",  slot:"Meal 5 · Dinner (shared)", a:dishLink(day.dinner)+pg(day.dinner)+"<br><b>~44g P / 560 kcal</b>", v:dishLink(day.dinner)+"<br><b>~40g P / 420 kcal</b>"},
     {t:"9:00",  slot:"Optional", v:"½ scoop whey in warm milk — Vartika top-up"},
   ];
   const tl = rows.map(r=>{
@@ -333,8 +383,10 @@ function renderPlan(){
       : `<div class="tl-split"><div class="tl-p"><span class="who a">Akarsh</span>${r.a||'—'}</div><div class="tl-p"><span class="who v">Vartika</span>${r.v||'—'}</div></div>`;
     return `<div class="tl-item"><div class="tl-time">${r.t}</div><div class="tl-body"><div class="tl-slot">${r.slot}</div>${body}</div></div>`;
   }).join('');
-  const glance = PLAN_DAYS.map((x,i)=>`<div class="gl-row ${i===ti?'today':''}" onclick="setPlanDay(${i})">
-      <span class="gl-day">${x.d}</span><span class="gl-meal">🥘 ${x.aLunch}</span><span class="gl-meal">🍽 ${x.dinner}</span>
+  const glance = PLAN_DAYS.map((x,i)=>`<div class="gl2 ${i===ti?'today':''}" onclick="setPlanDay(${i})">
+      <div class="gl2-day">${x.full}${i===ti?'<span class="now">Today</span>':''}</div>
+      <div class="gl2-line">🥘 <b>Lunch</b> — Akarsh: ${dishLink(x.aLunch)} · Vartika: ${dishLink("Mexican Burrito Bowl")}</div>
+      <div class="gl2-line">🍽 <b>Dinner</b> (both): ${dishLink(x.dinner)}</div>
     </div>`).join('');
   v.innerHTML = `
     <div class="daypills">${pills}</div>
@@ -350,7 +402,108 @@ function renderPlan(){
     <div class="glance-wrap">
       <div class="ed-title">Week at a glance — only lunch & dinner change</div>
       <div class="glance">${glance}</div>
-      <div class="legend">5 dishes on rotation, each ~3× a week: Kadhai Paneer · Shahi Paneer · Chilli Paneer · Egg Curry · Achari Paneer Tikka. Tap a day to jump to it.</div>
+      <div class="legend">5 dishes on rotation, each ~3× a week. Tap any underlined dish to see its full recipe. Tap a day to jump to it.</div>
+    </div>`;
+}
+
+/* ===== Recipes ===== */
+const RECIPES = {
+  "Berry Sweet Smoothie": { page:"p.72", macros:"Akarsh ~55g P / 430 kcal · Vartika ~52g P / 360 kcal",
+    note:"Both, every day (Meal 1). Based on the Mixed Berry Smoothie, boosted with whey + collagen so it doubles as your protein anchor.",
+    ing:["150g low-fat Greek yogurt (both)","Fat-free milk — 250ml Akarsh / 150ml Vartika","Mixed berries — 180g Akarsh / 120g Vartika (blueberries, strawberries, raspberries)","1 scoop vanilla whey or plant protein","1 scoop collagen","2–3 saffron strands, ½ tsp stevia + ice"],
+    method:["Blend everything until smooth.","Take with the multivitamin (Meal 1)."] },
+  "Mexican Burrito Bowl": { macros:"~33g P / 430 kcal",
+    note:"Vartika, every day (Meal 3).",
+    ing:["80g cooked black beans (or rajma), taco-spiced","70g low-fat paneer OR 100g tofu, cubed & pan-seared with taco seasoning","40g cooked rice","Lettuce, capsicum, tomato, red onion, 30g sweetcorn","Fresh salsa: tomato, onion, coriander, lime, jalapeño","30g low-fat Greek yogurt as sour-cream + squeeze of lime"],
+    method:["Warm the spiced beans.","Sear the paneer/tofu with taco seasoning.","Build the bowl over rice with veg, salsa and yogurt-lime."] },
+  "Base gravy": { macros:"Batch — makes ~4 dish portions",
+    note:"The shared onion-tomato base. Kadhai, Shahi, Egg Curry (and a spare) all build off this.",
+    ing:["6 onions","8 tomatoes","4 tbsp ginger-garlic paste","1 tsp cumin seeds","1 tsp turmeric, 2 tsp Kashmiri red chilli, 2 tsp coriander powder","Salt, spray oil"],
+    method:["Blend onions to a coarse paste; separately blend tomatoes to a puree.","Spray oil in a large pan, add cumin seeds and let them splutter.","Add the onion paste, cook on medium 8–10 min until golden and the raw smell is gone.","Add the ginger-garlic paste, cook 2 min.","Add tomato puree + turmeric, chilli and coriander powder + salt. Cook 10–12 min until it thickens and oil separates.","Cool and divide into 4 equal portions."] },
+  "Kadhai Paneer": { page:"p.36", macros:"~302 kcal / 21g P (curry) · batch ~3–4 servings",
+    ing:["1 base gravy portion","300g cubed low-fat paneer","2 capsicum + 1 onion (cubed)","3–4 Kashmiri chillies + 1 tbsp coriander seeds (for kadhai masala)","Garam masala, kasuri methi, spray oil","+ rice: 40g Akarsh / 30g Vartika"],
+    method:["Dry-roast the Kashmiri chillies + coriander seeds 1–2 min until fragrant; cool and grind coarse (this is your kadhai masala).","Spray oil, sauté cubed onion + capsicum 3–4 min on high — keep slightly crunchy. Scoop a little for garnish.","Add the base portion + ground kadhai masala; cook 3–4 min.","Add the paneer, a splash of water, garam masala and a pinch of crushed kasuri methi. Simmer 3–4 min.","Cool and portion."] },
+  "Shahi Paneer": { page:"p.39", macros:"~314 kcal / 29g P · batch ~3–4 servings",
+    ing:["1 base gravy portion","300g low-fat paneer","~400ml low-fat milk","10 cashews (soaked)","Shahi paneer masala, 1 bay leaf + 2 cloves, spray oil","+ rice: 40g Akarsh / 30g Vartika"],
+    method:["Blend the soaked cashews with a little milk into a smooth paste.","Warm the base portion, add cashew paste + shahi masala + bay leaf/cloves; cook 2 min.","Lower the heat and slowly stir in the milk. Simmer gently 5–7 min into a silky gravy — don't let it boil hard or the milk can split.","Add the paneer and simmer 3 min.","Cool and portion."] },
+  "Chilli Paneer Gravy Style": { page:"p.34", macros:"~290 kcal / 28g P · batch ~3–4 servings",
+    note:"Has its own quick base — no base gravy needed.",
+    ing:["300g low-fat paneer (cubed)","2 capsicum + 1 onion (cubed)","4 tbsp soy sauce, 2 tbsp ketchup, 2 tbsp green chilli sauce","2 tsp ginger-garlic, a few black peppercorns","2 tbsp cornflour mixed in water, spray oil","+ rice: 40g Akarsh / 30g Vartika"],
+    method:["Spray oil, add ginger-garlic + crushed peppercorns, sauté 1 min.","Add the onion + capsicum, cook on high 3–4 min.","Add the soy sauce, ketchup and chilli sauce; mix well.","Pour in the cornflour-water slurry and stir until the sauce turns glossy and thick.","Fold in the paneer and toss 2 min to coat. Cool and portion."] },
+  "Egg Curry": { page:"p.50", macros:"~270 kcal / 28g P (3 eggs) · batch ~3–4 servings",
+    note:"Whites-heavy split for macros: Akarsh 1 whole + 2 whites / Vartika 1 whole + 1 white.",
+    ing:["1 base gravy portion","8–10 boiled eggs","Egg-curry masala, pinch turmeric + chilli, spray oil","+ rice: 40g Akarsh / 30g Vartika"],
+    method:["Lightly pan-sear the boiled eggs in a little spray oil with a pinch of turmeric + chilli until the skins blister (optional, adds flavour).","Warm the base portion, add egg-curry masala + a splash of water; simmer 5 min.","Add the eggs and simmer 3–4 min so they soak up the gravy.","Cool and portion, keeping the eggs in the gravy."] },
+  "Achari Paneer Tikka": { page:"p.15", macros:"~264 kcal / 27g P · batch ~3–4 servings",
+    note:"Start this first so it has time to marinate.",
+    ing:["300g low-fat paneer (cubed)","2 capsicum + 1 onion (chunks)","4 tbsp yogurt","1 tsp each mustard / fennel / cumin / turmeric / chilli powder","Garam masala, pinch methi powder, salt, lemon","+ green salad + rice: 40g Akarsh / 30g Vartika"],
+    method:["Mix the yogurt with all the spices, salt and a squeeze of lemon into a marinade.","Fold in the paneer and veg; rest 30–60 min.","Spread on a lined tray and bake/air-fry at 180°C for ~15 min (or pan-grill) until golden at the edges.","Cool and portion; keep a little chopped salad separately."] },
+  "Burrito bowl kit": { macros:"Beans + salsa + dressing for the week",
+    note:"Vartika's weekly kit. Assemble the bowl fresh each day.",
+    ing:["Beans: 2 cans black beans (or cooked rajma), 1 tsp cumin, 1 tsp smoked paprika/taco seasoning, 2 cloves garlic, salt","Salsa: tomato, red onion, coriander, lime, jalapeño, salt","Dressing: Greek yogurt + lime + pinch salt"],
+    method:["Beans: spray oil, sauté garlic, add drained beans + cumin + taco seasoning + a splash of water; simmer 8–10 min, lightly mashing some. Cool and portion.","Salsa: dice tomato, red onion and jalapeño; mix with coriander, lime and salt. Store in a jar (2–3 days).","Dressing: stir Greek yogurt with lime + a pinch of salt; store.","Also pack ready: cooked rice, seared paneer/tofu, shredded lettuce, corn."] },
+};
+function openRecipe(name){
+  const r=RECIPES[name]; if(!r) return;
+  const m=document.getElementById('recipeModal');
+  m.querySelector('.rc-title').textContent = name + (r.page? '  '+r.page : '');
+  m.querySelector('.rc-sub').textContent = r.macros||'';
+  m.querySelector('.rc-body').innerHTML =
+    (r.note?`<div class="rc-note">${r.note}</div>`:'')+
+    `<div class="rc-h">Ingredients</div><ul class="rc-ing">${(r.ing||[]).map(x=>`<li>${x}</li>`).join('')}</ul>`+
+    `<div class="rc-h">Method</div><ol class="rc-meth">${(r.method||[]).map(x=>`<li>${x}</li>`).join('')}</ol>`;
+  m.classList.add('show');
+}
+function closeRecipe(){ document.getElementById('recipeModal').classList.remove('show'); }
+
+/* ===== Prep day ===== */
+function renderPrep(){
+  const v=document.getElementById('view-prep');
+  const cut=[
+    ["Onions (~1.5kg)","Dice most; keep 2 sliced red onions for bowls"],
+    ["Tomatoes (~1.5kg)","Roughly chop / puree — base gravy"],
+    ["Capsicum (~8)","Cube — Kadhai, Chilli Paneer, Achari + bowls"],
+    ["Ginger + garlic","Blitz a big batch of paste — every dish"],
+    ["Green chillies","Finely chop — gravies + salsa"],
+    ["Lettuce (2 heads)","Shred, store dry with paper towel"],
+    ["Cucumber, tomato, red onion","Dice — bowls + Achari salad"],
+    ["Coriander + mint","Chop — garnish + salsa"],
+    ["Lemons / limes","Cut into wedges — bowls, marinades, waters"],
+    ["Cashews","Soak — for Shahi Paneer"],
+    ["Paneer (~1.2kg)","Cube; grill a tray of it"],
+    ["Eggs (dozen)","Boil, peel, store — Egg Curry"],
+  ];
+  const cook=[
+    ["Boil eggs (whole dozen); set to cool","~12 min",null],
+    ["Cook rice in bulk (~7 portions); spread to cool","~20 min",null],
+    ["Make the shared onion-tomato base gravy (big batch)","~25 min","Base gravy"],
+    ["Kadhai Paneer — from base + roasted chilli-coriander masala","~10 min","Kadhai Paneer"],
+    ["Shahi Paneer — from base + milk + soaked cashews","~10 min","Shahi Paneer"],
+    ["Chilli Paneer — sauté veg, sauces, cornflour slurry, paneer","~10 min","Chilli Paneer Gravy Style"],
+    ["Egg Curry — simmer boiled eggs in base + egg masala","~10 min","Egg Curry"],
+    ["Achari Paneer — marinate & grill (start marinade FIRST)","~15 min","Achari Paneer Tikka"],
+    ["Burrito bowl kit — spiced beans + salsa + yogurt-lime","~20 min","Burrito bowl kit"],
+    ["Portion, label, fridge Mon–Wed / freeze Thu–Sun","~15 min",null],
+  ];
+  const cutRows = cut.map(c=>`<div class="prep-row"><div class="pr-t">${c[0]}</div><div class="pr-d">${c[1]}</div></div>`).join('');
+  const cookRows = cook.map((c,i)=>`<div class="prep-row"><span class="pr-time">${c[1]}</span><span class="step-num">${i+1}</span><span class="pr-t">${c[0]}</span>${c[2]?`<div class="rc-link" onclick="openRecipe('${c[2]}')">View recipe →</div>`:''}</div>`).join('');
+  v.innerHTML = `
+    <div class="prep-intro">One shop + one ~2-hour cook session (usually Monday) sets up the whole week. Cook the 5 dishes, portion them, fridge Mon–Wed and freeze Thu–Sun. Only the smoothie and burrito-bowl assembly are done fresh each day.</div>
+    <div class="prep-card"><div class="prep-head">Step 1 · Cut &amp; prep everything first</div>${cutRows}</div>
+    <div class="prep-card"><div class="prep-head">Step 2 · Cook in this order (~2 hrs)</div>${cookRows}</div>
+    <div class="prep-card"><div class="prep-head">Step 3 · Fridge vs freezer</div>
+      <div class="prep-row"><div class="pr-t">🧊 Fridge (Mon–Wed)</div><div class="pr-d">First 3 days of dishes, 2–3 rice portions, black beans, grilled paneer, chopped salad veg. Eat within 3–4 days.</div></div>
+      <div class="prep-row"><div class="pr-t">❄️ Freezer (Thu–Sun)</div><div class="pr-d">Remaining dish portions + extra rice. Thaw overnight in the fridge before the day you need it.</div></div>
+      <div class="prep-row"><div class="pr-t">🍳 Fresh each day</div><div class="pr-d">Smoothie, burrito-bowl assembly, ritual waters (2–5 min each).</div></div>
+      <div class="prep-row"><div class="pr-d">Label tip: mark each container with dish + day, e.g. "Egg Curry – Tue" / "Kadhai – Thu FREEZER". Cool rice quickly and refrigerate within an hour.</div></div>
+    </div>
+    <div class="prep-card"><div class="prep-head">Every day (5 minutes)</div>
+      <div class="prep-row">🌅 Ritual waters — lemon + turmeric-ginger + jeera (or pour from a 2-day jug)</div>
+      <div class="prep-row">🥤 Blend the smoothie — frozen berry bag + yogurt + milk + whey + collagen + saffron</div>
+      <div class="prep-row">🌯 Vartika: assemble the burrito bowl — warm beans + paneer + rice + veg + salsa + yogurt-lime</div>
+      <div class="prep-row">🍲 Reheat the day's dish + rice (thaw freezer portions the night before)</div>
+      <div class="prep-row">☕ Coffee + nuts (M2) · 🥥 coconut water + nuts post-workout (M4)</div>
+      <div class="prep-row">🥛 Vartika optional: ½ scoop whey in warm milk in the evening (top-up)</div>
     </div>`;
 }
 function resetAll(){ if(!confirm('Clear all ticks (keeps your items)?')) return;

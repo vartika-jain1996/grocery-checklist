@@ -666,8 +666,31 @@ function onBillPhoto(inp){
     const c=document.createElement('canvas'); c.width=w; c.height=h; c.getContext('2d').drawImage(img,0,0,w,h);
     const durl=c.toDataURL('image/jpeg',0.5);
     const s=(data.submissions||[])[_photoIdx]; if(s){ s.photo=durl; saveLocal(); render(); schedulePush(); }
+    scanReceipt(durl);
   }; img.src=rd.result; };
   rd.readAsDataURL(f);
+}
+/* AI receipt scan -> replace the whole list */
+async function scanReceipt(durl){
+  if(!cloudOn) return;
+  setSync('Scanning receipt…');
+  try{
+    const {data:res, error} = await sb.functions.invoke('scan-receipt', { body:{ image: durl } });
+    if(error){ setSync('Scan failed','off'); askInfo('Couldn’t scan the receipt', (error.message||'The scanner isn’t set up yet.')+' '); return; }
+    const items = (res && Array.isArray(res.items)) ? res.items : [];
+    if(items.length) applyScannedItems(items);
+    else { setSync('No items found','off'); askInfo('No items found','The photo didn’t contain a readable receipt. Try a clearer, straight-on photo.'); }
+  }catch(e){ setSync('Scan failed','off'); }
+}
+function applyScannedItems(items){
+  const secItems = items.map(x=>{
+    const note=[ (x.qty && String(x.qty)!=='1') ? String(x.qty) : '', (x.price!=null && x.price!=='') ? ('$'+x.price) : '' ].filter(Boolean).join(' · ');
+    return it(String(x.name||'Item'), note);
+  });
+  data.stores = [{ id:'r'+uid(), name:'🧾 From receipt', collapsed:false, items: secItems }];
+  data.updatedAt = Date.now();
+  localStorage.setItem(LKEY, JSON.stringify(data));
+  render(); schedulePush(); setSync('Synced ✓'); showTab('list');
 }
 function viewPhoto(i){ const s=(data.submissions||[])[i]; if(!s||!s.photo) return; const m=document.getElementById('photoModal'); m.querySelector('img').src=s.photo; m.classList.add('show'); }
 function closePhoto(){ document.getElementById('photoModal').classList.remove('show'); }

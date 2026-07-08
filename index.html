@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0f766e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Groceries">
+<title>Grocery Checklist</title>
+<style>
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  :root{
+    --bg:#f4f6f8; --card:#ffffff; --ink:#1a2230; --muted:#6b7686;
+    --line:#e6e9ee; --teal:#0f766e; --teal-soft:#e6f4f2; --done:#94a3b8;
+  }
+  body{ margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg); color:var(--ink); line-height:1.4; padding-bottom:48px; }
+  header{ position:sticky; top:0; z-index:10; background:var(--teal); color:#fff;
+    padding:16px 18px 14px; box-shadow:0 2px 10px rgba(0,0,0,.12); }
+  .titlerow{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  h1{ margin:0; font-size:20px; font-weight:700; letter-spacing:-.2px; }
+  .sync{ font-size:11px; font-weight:600; padding:4px 9px; border-radius:20px; background:rgba(255,255,255,.18); white-space:nowrap; }
+  .sync.off{ background:#b91c1c; }
+  .sub{ font-size:12.5px; opacity:.85; margin-top:2px; }
+  .progwrap{ margin-top:12px; }
+  .progbar{ height:8px; background:rgba(255,255,255,.25); border-radius:6px; overflow:hidden; }
+  .progfill{ height:100%; background:#fff; width:0%; transition:width .3s ease; border-radius:6px; }
+  .progtext{ font-size:12px; margin-top:5px; opacity:.9; }
+
+  .tabs{ display:flex; gap:8px; padding:12px 14px 0; max-width:720px; margin:0 auto; }
+  .tab{ flex:1; text-align:center; padding:10px; font-size:13.5px; font-weight:600;
+    background:var(--card); border:1px solid var(--line); border-radius:10px 10px 0 0;
+    color:var(--muted); cursor:pointer; user-select:none; }
+  .tab.active{ color:var(--teal); border-bottom:2px solid var(--teal); }
+
+  main{ max-width:720px; margin:0 auto; padding:6px 14px; }
+  .store{ background:var(--card); border:1px solid var(--line); border-radius:12px; margin:12px 0; overflow:hidden; }
+  .store-head{ display:flex; align-items:center; gap:10px; padding:13px 15px; cursor:pointer; }
+  .chev{ transition:transform .2s; flex:none; color:var(--muted); }
+  .store.collapsed .chev{ transform:rotate(-90deg); }
+  .store-title{ font-size:15px; font-weight:700; flex:1; }
+  .store-title[contenteditable]{ outline:none; border-bottom:1px dashed var(--teal); }
+  .store-count{ font-size:12px; color:var(--muted); font-weight:600; background:var(--bg); padding:3px 9px; border-radius:20px; }
+  .del-store{ flex:none; color:#b91c1c; font-size:18px; padding:0 4px; cursor:pointer; }
+  .items{ border-top:1px solid var(--line); }
+  .store.collapsed .items{ display:none; }
+  .item{ display:flex; align-items:flex-start; gap:12px; padding:12px 15px; border-bottom:1px solid var(--line); }
+  .item:last-child{ border-bottom:none; }
+  .box{ flex:none; width:22px; height:22px; border:2px solid #c4ccd6; border-radius:6px; margin-top:1px;
+    display:flex; align-items:center; justify-content:center; transition:.15s; cursor:pointer; }
+  .item.done .box{ background:var(--teal); border-color:var(--teal); }
+  .box svg{ width:14px; height:14px; opacity:0; }
+  .item.done .box svg{ opacity:1; }
+  .txt{ flex:1; cursor:pointer; }
+  .name{ font-size:14.5px; font-weight:600; }
+  .item.done .name{ color:var(--done); text-decoration:line-through; }
+  .note{ font-size:12px; color:var(--muted); margin-top:2px; }
+  .stamp{ font-size:11px; color:var(--teal); margin-top:3px; font-weight:600; }
+  .item.done .stamp{ color:var(--done); }
+  .del-item{ flex:none; color:#b91c1c; font-size:17px; padding:2px 4px; cursor:pointer; display:none; }
+  body.editing .del-item{ display:block; }
+  body.editing .del-store{ display:block; }
+  .del-store{ display:none; }
+
+  .additem{ display:none; padding:10px 15px; gap:8px; border-top:1px dashed var(--line); background:#fafbfc; }
+  body.editing .additem{ display:flex; }
+  .additem input{ flex:1; padding:9px 11px; font-size:14px; border:1px solid var(--line); border-radius:8px; }
+  .additem button{ padding:9px 14px; font-size:14px; font-weight:600; background:var(--teal); color:#fff; border:none; border-radius:8px; cursor:pointer; }
+
+  .day{ background:var(--card); border:1px solid var(--line); border-radius:12px; margin:12px 0; overflow:hidden; }
+  .day-head{ padding:12px 15px; font-weight:700; font-size:14px; background:var(--teal-soft); color:var(--teal); display:flex; justify-content:space-between; }
+  .day-item{ padding:9px 15px; font-size:13.5px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; gap:10px; }
+  .day-item:last-child{ border-bottom:none; }
+  .day-item .st{ font-size:11px; color:var(--muted); flex:none; }
+  .empty{ text-align:center; color:var(--muted); padding:40px 20px; font-size:14px; }
+
+  .addstore{ display:none; width:100%; padding:13px; margin:6px 0 2px; font-size:14px; font-weight:600;
+    border:1.5px dashed var(--teal); color:var(--teal); background:var(--teal-soft); border-radius:12px; cursor:pointer; }
+  body.editing .addstore{ display:block; }
+
+  .toolbar{ display:flex; gap:8px; margin:14px 0 4px; }
+  .btn{ flex:1; padding:11px; font-size:13px; font-weight:600; border-radius:10px;
+    border:1px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer; }
+  .btn.primary{ background:var(--teal); color:#fff; border-color:var(--teal); }
+  .btn.warn{ color:#b91c1c; border-color:#f0c9c9; background:#fef2f2; }
+  .hidden{ display:none; }
+  .footnote{ text-align:center; font-size:11px; color:var(--muted); margin-top:18px; padding:0 10px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="titlerow">
+    <h1>🛒 Grocery Checklist</h1>
+    <span class="sync" id="sync">…</span>
+  </div>
+  <div class="sub" id="sub">Synced across your devices</div>
+  <div class="progwrap">
+    <div class="progbar"><div class="progfill" id="progfill"></div></div>
+    <div class="progtext" id="progtext">0 of 0 done</div>
+  </div>
+</header>
+
+<div class="tabs">
+  <div class="tab active" id="tab-list" onclick="showTab('list')">Shopping List</div>
+  <div class="tab" id="tab-log" onclick="showTab('log')">Order Log</div>
+</div>
+
+<main>
+  <div id="view-list"></div>
+  <button class="addstore" onclick="addStore()">＋ Add section</button>
+  <div id="view-log" class="hidden"></div>
+
+  <div class="toolbar">
+    <button class="btn primary" id="editBtn" onclick="toggleEdit()">✏️ Edit list</button>
+    <button class="btn" onclick="collapseAll()">Collapse all</button>
+  </div>
+  <div class="toolbar">
+    <button class="btn warn" onclick="resetAll()">Reset all ticks</button>
+  </div>
+  <div class="footnote">In Edit mode you can add/delete items and sections, rename by tapping the text, and remove sections with 🗑. On iPad: Safari → Share → Add to Home Screen.</div>
+</main>
+
+<script>
+/* ==== CONFIG: Supabase cloud sync ==== */
+const SB_URL = "https://utcsxenvsnuywojtonll.supabase.co/rest/v1/checklist";
+const SB_KEY = "sb_publishable_EIU5NMbeUTy0mdhUQLP3Ug_jGTPiMki";
+/* ===================================== */
+
+const LKEY = "grocery_checklist_v3";
+let editing = false, pushTimer = null, pulling = false;
+
+const SEED = { updatedAt:0, stores:[
+  { id:"g", name:"🏪 Indian Grocery", collapsed:false, items:[
+    it("Ginger turmeric"), it("Low-fat paneer","~1.2kg · 4 of 5 dishes + burrito bowls"),
+    it("Fresh turmeric + black pepper"),
+    it("Spices bundle","shahi paneer masala, egg-curry masala, garam masala, Kashmiri chilli, coriander seeds, cumin, turmeric, mustard & fennel powder, methi"),
+    it("Cumin seeds","jeera water"), it("Saffron strands"),
+    it("Chaat masala","for mint chutney"), it("Black salt (kala namak)","for mint chutney") ]},
+  { id:"c", name:"📦 Costco", collapsed:false, items:[
+    it("Eggs — 1 dozen","Egg Curry"), it("Whey or plant protein powder","vanilla"),
+    it("Collagen powder"), it("Black beans / rajma","canned"), it("Sweetcorn","canned/frozen"),
+    it("Red onion"), it("Onions — ~1.5kg","regular/brown"), it("Coffee"), it("Multivitamins") ]},
+  { id:"w", name:"🛒 Woolworths / Coles", collapsed:false, items:[
+    it("Low-fat Greek yogurt","large tub ~2kg · smoothies, burrito bowls, achari marinade"),
+    it("Fat-free / skim milk","~3L · incl. 200ml for Shahi Paneer"), it("Taco / burrito seasoning"),
+    it("Tofu","optional · paneer sub"), it("Mixed berries","fresh or frozen, ~1.5kg"),
+    it("Capsicum — ~8","Kadhai / Chilli Paneer / Achari"), it("Tomatoes — ~1.5kg"),
+    it("Cucumber — ~3"), it("Carrots","small"), it("Jalapeños"), it("Ginger, garlic, green chilli"),
+    it("Fresh coriander, mint"), it("Lemons & limes"), it("Red rice"),
+    it("Low-sodium / dark soy sauce"), it("Green chilli sauce"), it("Ketchup"), it("Cornflour"),
+    it("Almonds, walnuts, mixed nuts"), it("Coconut water — 7+"), it("Stevia / sugar-free sweetener"),
+    it("Spray oil / cooking oil") ]},
+]};
+
+function uid(){ return Math.random().toString(36).slice(2,9); }
+function it(n,d){ return {id:uid(), n:n, d:d||"", done:false, ts:0}; }
+
+let data = load();
+function load(){ try{ const s=JSON.parse(localStorage.getItem(LKEY)); if(s&&s.stores) return s; }catch(e){} return JSON.parse(JSON.stringify(SEED)); }
+function saveLocal(){ data.updatedAt=Date.now(); localStorage.setItem(LKEY, JSON.stringify(data)); }
+
+const cloudOn = SB_URL && !SB_URL.startsWith("__");
+function sbHeaders(extra){ return Object.assign({apikey:SB_KEY, Authorization:"Bearer "+SB_KEY, "Content-Type":"application/json"}, extra||{}); }
+function setSync(t,cls){ const e=document.getElementById('sync'); e.textContent=t; e.className='sync '+(cls||''); }
+function fmtDate(ts){ return new Date(ts).toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'}); }
+function fmtTime(ts){ return new Date(ts).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'}); }
+
+/* ---- cloud sync: whole-document, newest wins ---- */
+function schedulePush(){ if(!cloudOn) return; clearTimeout(pushTimer); pushTimer=setTimeout(push, 600); }
+async function push(){
+  if(!cloudOn) return;
+  try{ setSync('Syncing…');
+    await fetch(SB_URL, {method:'POST', headers:sbHeaders({Prefer:'resolution=merge-duplicates'}), body:JSON.stringify({id:'main', data:data})});
+    setSync('Synced ✓');
+  }catch(e){ setSync('Offline','off'); }
+}
+async function pull(){
+  if(!cloudOn){ setSync('Local only'); return; }
+  if(pulling) return; pulling=true;
+  try{
+    const r = await fetch(SB_URL+'?id=eq.main&select=data', {headers:sbHeaders()});
+    const arr = await r.json();
+    const remote = (Array.isArray(arr) && arr[0]) ? arr[0].data : null;
+    if(remote && remote.stores && (remote.updatedAt||0) > (data.updatedAt||0)){
+      data = remote; localStorage.setItem(LKEY, JSON.stringify(data)); render();
+    }
+    setSync('Synced ✓');
+  }catch(e){ setSync('Offline','off'); }
+  pulling=false;
+}
+
+function render(){
+  const list=document.getElementById('view-list'); list.innerHTML='';
+  let total=0, done=0;
+  data.stores.forEach(store=>{
+    let sDone=0;
+    const itemsHtml = store.items.map(x=>{
+      total++; if(x.done){ done++; sDone++; }
+      return `<div class="item ${x.done?'done':''}">
+        <div class="box" onclick="toggle('${store.id}','${x.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+        <div class="txt" onclick="editing?renameItem('${store.id}','${x.id}'):toggle('${store.id}','${x.id}')">
+          <div class="name">${esc(x.n)}</div>
+          ${x.d?`<div class="note">${esc(x.d)}</div>`:''}
+          ${x.done?`<div class="stamp">✓ Ordered ${fmtDate(x.ts)} · ${fmtTime(x.ts)}</div>`:''}
+        </div>
+        <div class="del-item" onclick="delItem('${store.id}','${x.id}')">✕</div>
+      </div>`;
+    }).join('');
+    list.innerHTML += `<div class="store ${store.collapsed?'collapsed':''}">
+      <div class="store-head">
+        <span class="chev" onclick="toggleStore('${store.id}')">▾</span>
+        <div class="store-title" onclick="editing?renameStore('${store.id}'):toggleStore('${store.id}')">${esc(store.name)}</div>
+        <span class="store-count">${sDone}/${store.items.length}</span>
+        <span class="del-store" onclick="delStore('${store.id}')">🗑</span>
+      </div>
+      <div class="items">${itemsHtml||'<div class="item"><div class="txt note">No items yet</div></div>'}</div>
+      <div class="additem">
+        <input placeholder="Add item to ${esc(store.name)}…" onkeydown="if(event.key==='Enter')addItem('${store.id}',this)">
+        <button onclick="addItem('${store.id}',this.previousElementSibling)">Add</button>
+      </div>
+    </div>`;
+  });
+  const pct = total? Math.round(done/total*100):0;
+  document.getElementById('progfill').style.width=pct+'%';
+  document.getElementById('progtext').textContent=`${done} of ${total} done · ${pct}%`;
+  renderLog();
+}
+function esc(s){ return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function renderLog(){
+  const log=document.getElementById('view-log'); const byDay={};
+  data.stores.forEach(store=> store.items.forEach(x=>{
+    if(x.done){ const k=new Date(x.ts).toDateString();
+      (byDay[k]=byDay[k]||[]).push({name:x.n,store:store.name,ts:x.ts}); }
+  }));
+  const days=Object.keys(byDay).sort((a,b)=>new Date(b)-new Date(a));
+  if(!days.length){ log.innerHTML=`<div class="empty">Nothing ordered yet.<br>Tick items and they'll be logged here by day.</div>`; return; }
+  log.innerHTML=days.map(day=>{ const items=byDay[day].sort((a,b)=>b.ts-a.ts);
+    return `<div class="day"><div class="day-head"><span>${fmtDate(items[0].ts)}</span><span>${items.length} item${items.length>1?'s':''}</span></div>
+      ${items.map(x=>`<div class="day-item"><span>${esc(x.name)} <span style="color:var(--muted)">· ${esc(x.store.replace(/^[^ ]+ /,''))}</span></span><span class="st">${fmtTime(x.ts)}</span></div>`).join('')}</div>`;
+  }).join('');
+}
+
+function findStore(sid){ return data.stores.find(s=>s.id===sid); }
+function toggle(sid,iid){ const x=findStore(sid).items.find(i=>i.id===iid); x.done=!x.done; x.ts=Date.now(); saveLocal(); render(); schedulePush(); }
+function toggleStore(sid){ const s=findStore(sid); s.collapsed=!s.collapsed; saveLocal(); render(); schedulePush(); }
+function collapseAll(){ const anyOpen=data.stores.some(s=>!s.collapsed); data.stores.forEach(s=>s.collapsed=anyOpen); saveLocal(); render(); schedulePush(); }
+
+function addItem(sid,input){ const v=(input.value||'').trim(); if(!v) return; findStore(sid).items.push(it(v)); input.value=''; saveLocal(); render(); schedulePush();
+  const boxes=document.querySelectorAll('.additem input'); }
+function delItem(sid,iid){ const s=findStore(sid); s.items=s.items.filter(i=>i.id!==iid); saveLocal(); render(); schedulePush(); }
+function renameItem(sid,iid){ const x=findStore(sid).items.find(i=>i.id===iid); const v=prompt('Rename item:',x.n); if(v!==null){ x.n=v.trim()||x.n; saveLocal(); render(); schedulePush(); } }
+function renameStore(sid){ const s=findStore(sid); const v=prompt('Rename section:',s.name); if(v!==null){ s.name=v.trim()||s.name; saveLocal(); render(); schedulePush(); } }
+function delStore(sid){ const s=findStore(sid); if(!confirm('Delete section "'+s.name+'" and all its items?')) return; data.stores=data.stores.filter(x=>x.id!==sid); saveLocal(); render(); schedulePush(); }
+function addStore(){ const v=prompt('New section name (e.g. 🥩 Butcher):'); if(v===null) return; data.stores.push({id:uid(), name:v.trim()||'New section', collapsed:false, items:[]}); saveLocal(); render(); schedulePush(); }
+
+function toggleEdit(){ editing=!editing; document.body.classList.toggle('editing',editing);
+  document.getElementById('editBtn').textContent = editing?'✓ Done editing':'✏️ Edit list'; render(); }
+function showTab(t){
+  document.getElementById('tab-list').classList.toggle('active',t==='list');
+  document.getElementById('tab-log').classList.toggle('active',t==='log');
+  document.getElementById('view-list').classList.toggle('hidden',t!=='list');
+  document.querySelector('.addstore').classList.toggle('hidden',t!=='list');
+  document.getElementById('view-log').classList.toggle('hidden',t!=='log');
+}
+function resetAll(){ if(!confirm('Clear all ticks (keeps your items)?')) return;
+  data.stores.forEach(s=>s.items.forEach(x=>{ x.done=false; x.ts=0; })); saveLocal(); render(); schedulePush(); }
+
+render();
+if(cloudOn){ pull(); setInterval(pull,5000); document.addEventListener('visibilitychange',()=>{ if(!document.hidden) pull(); }); }
+else setSync('Local only');
+</script>
+</body>
+</html>

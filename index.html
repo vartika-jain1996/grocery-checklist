@@ -149,6 +149,20 @@
   .pr-time{ float:right; font-size:11px; color:var(--muted); font-weight:700; margin-left:8px; }
   .step-num{ display:inline-flex; width:20px; height:20px; border-radius:50%; background:var(--teal); color:#fff; font-size:11px; font-weight:800; align-items:center; justify-content:center; margin-right:9px; vertical-align:middle; }
   .rc-link{ font-size:11.5px; color:var(--teal); font-weight:700; margin-top:3px; cursor:pointer; }
+  .btn.coles{ background:#e01a22; color:#fff; border-color:#e01a22; }
+  .coles-item{ display:flex; justify-content:space-between; align-items:center; gap:10px; padding:11px 12px; border:1px solid var(--line); border-radius:9px; margin:7px 0; font-size:13.5px; font-weight:600; color:var(--ink); text-decoration:none; }
+  .coles-item:active{ background:var(--bg); }
+  .coles-go{ font-size:12px; color:#e01a22; font-weight:800; flex:none; }
+  .coles-copy{ width:100%; margin:2px 0 10px; }
+  .pin-in{ width:100%; text-align:center; font-size:26px; letter-spacing:8px; padding:12px; border:1.5px solid var(--line); border-radius:10px; font-weight:700; }
+  .pin-in:focus{ outline:none; border-color:var(--teal); }
+  .pin-err{ font-size:12.5px; color:#b91c1c; text-align:center; min-height:16px; margin-top:8px; font-weight:600; }
+  .searchbar{ display:flex; align-items:center; gap:9px; background:var(--card); border:1px solid var(--line); border-radius:11px; padding:10px 13px; margin:12px 0 0; }
+  .searchbar .s-ico{ font-size:14px; opacity:.55; }
+  .searchbar input{ flex:1; border:none; outline:none; font-size:15px; background:transparent; color:var(--ink); }
+  .searchbar .s-clr{ color:var(--muted); font-size:14px; cursor:pointer; display:none; padding:2px 4px; }
+  .searchbar.has .s-clr{ display:block; }
+  mark{ background:#fde68a; color:inherit; border-radius:3px; padding:0 1px; }
 </style>
 </head>
 <body>
@@ -172,12 +186,20 @@
 </div>
 
 <main>
+  <div class="searchbar" id="searchbar">
+    <span class="s-ico">🔎</span>
+    <input id="search" type="search" autocomplete="off" placeholder="Search items…" oninput="doSearch(this.value)">
+    <span class="s-clr" id="sClr" onclick="clearSearch()">✕</span>
+  </div>
   <div id="view-list"></div>
   <button class="addstore" onclick="addStore()">＋ Add section</button>
   <div id="view-plan" class="hidden"></div>
   <div id="view-prep" class="hidden"></div>
   <div id="view-log" class="hidden"></div>
 
+  <div class="toolbar">
+    <button class="btn coles" onclick="openColes()">🛒 Send list to Coles</button>
+  </div>
   <div class="toolbar">
     <button class="btn primary" id="editBtn" onclick="toggleEdit()">✏️ Edit list</button>
     <button class="btn" onclick="collapseAll()">Collapse all</button>
@@ -198,10 +220,32 @@
   </div>
 </div>
 
+<div id="colesModal" class="rc-overlay" onclick="if(event.target===this)closeColes()">
+  <div class="rc-card">
+    <div class="rc-top">
+      <div><div class="rc-title">Shop at Coles</div><div class="rc-sub"></div></div>
+      <button class="rc-x" onclick="closeColes()">✕</button>
+    </div>
+    <div class="rc-body"></div>
+  </div>
+</div>
+
+<div id="pinModal" class="rc-overlay" onclick="if(event.target===this)closePin()">
+  <div class="rc-card" style="max-width:340px">
+    <div class="rc-top"><div class="rc-title">Enter code to edit</div><button class="rc-x" onclick="closePin()">✕</button></div>
+    <div class="rc-body">
+      <input id="pinInput" type="tel" inputmode="numeric" maxlength="8" placeholder="••••" class="pin-in" onkeydown="if(event.key==='Enter')submitPin()">
+      <div id="pinErr" class="pin-err"></div>
+      <button class="btn primary" style="width:100%;margin-top:12px" onclick="submitPin()">Unlock editing</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ==== CONFIG: Supabase cloud sync ==== */
 const SB_URL = "https://utcsxenvsnuywojtonll.supabase.co/rest/v1/checklist";
 const SB_KEY = "sb_publishable_EIU5NMbeUTy0mdhUQLP3Ug_jGTPiMki";
+const EDIT_CODE = "2580";  // code required to unlock Edit mode
 /* ===================================== */
 
 const LKEY = "grocery_checklist_v3";
@@ -272,19 +316,21 @@ function render(){
   let total=0, done=0;
   data.stores.forEach(store=>{
     let sDone=0;
-    const itemsHtml = store.items.map(x=>{
-      total++; if(x.done){ done++; sDone++; }
+    store.items.forEach(x=>{ total++; if(x.done){ done++; sDone++; } });
+    const shown = searchQ ? store.items.filter(x=>(x.n+' '+(x.d||'')).toLowerCase().includes(searchQ)) : store.items;
+    if(searchQ && shown.length===0) return;
+    const itemsHtml = shown.map(x=>{
       return `<div class="item ${x.done?'done':''}">
         <div class="box" onclick="toggle('${store.id}','${x.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
         <div class="txt" onclick="editing?renameItem('${store.id}','${x.id}'):toggle('${store.id}','${x.id}')">
-          <div class="name">${esc(x.n)}</div>
-          ${x.d?`<div class="note">${esc(x.d)}</div>`:''}
+          <div class="name">${hl(x.n)}</div>
+          ${x.d?`<div class="note">${hl(x.d)}</div>`:''}
           ${x.done?`<div class="stamp">✓ Ordered ${fmtDate(x.ts)} · ${fmtTime(x.ts)}</div>`:''}
         </div>
         <div class="del-item" onclick="delItem('${store.id}','${x.id}')">✕</div>
       </div>`;
     }).join('');
-    list.innerHTML += `<div class="store ${store.collapsed?'collapsed':''}">
+    list.innerHTML += `<div class="store ${(!searchQ && store.collapsed)?'collapsed':''}">
       <div class="store-head">
         <span class="chev" onclick="toggleStore('${store.id}')">▾</span>
         <div class="store-title" onclick="editing?renameStore('${store.id}'):toggleStore('${store.id}')">${esc(store.name)}</div>
@@ -298,6 +344,7 @@ function render(){
       </div>
     </div>`;
   });
+  if(searchQ && !list.innerHTML.trim()) list.innerHTML=`<div class="empty">No items match "${esc(searchQ)}".</div>`;
   const pct = total? Math.round(done/total*100):0;
   document.getElementById('progfill').style.width=pct+'%';
   document.getElementById('progtext').textContent=`${done} of ${total} done · ${pct}%`;
@@ -332,18 +379,49 @@ function renameStore(sid){ const s=findStore(sid); const v=prompt('Rename sectio
 function delStore(sid){ const s=findStore(sid); if(!confirm('Delete section "'+s.name+'" and all its items?')) return; data.stores=data.stores.filter(x=>x.id!==sid); saveLocal(); render(); schedulePush(); }
 function addStore(){ const v=prompt('New section name (e.g. 🥩 Butcher):'); if(v===null) return; data.stores.push({id:uid(), name:v.trim()||'New section', collapsed:false, items:[]}); saveLocal(); render(); schedulePush(); }
 
-function toggleEdit(){ editing=!editing; document.body.classList.toggle('editing',editing);
-  document.getElementById('editBtn').textContent = editing?'✓ Done editing':'✏️ Edit list'; render(); }
+function toggleEdit(){
+  if(!editing){ openPin(); return; }
+  editing=false; document.body.classList.remove('editing');
+  document.getElementById('editBtn').textContent='✏️ Edit list'; render();
+}
+function enterEdit(){ editing=true; document.body.classList.add('editing');
+  document.getElementById('editBtn').textContent='✓ Done editing'; render(); }
+function openPin(){ const m=document.getElementById('pinModal'); document.getElementById('pinInput').value=''; document.getElementById('pinErr').textContent=''; m.classList.add('show'); setTimeout(()=>document.getElementById('pinInput').focus(),60); }
+function closePin(){ document.getElementById('pinModal').classList.remove('show'); }
+function submitPin(){ const v=document.getElementById('pinInput').value.trim();
+  if(v===EDIT_CODE){ closePin(); enterEdit(); }
+  else{ document.getElementById('pinErr').textContent='Wrong code — try again.'; document.getElementById('pinInput').value=''; document.getElementById('pinInput').focus(); } }
+
+/* ===== Send to Coles ===== */
+function clx(n){ return n.replace(/\s*[—–]\s.*$/,'').replace(/\s*\(.*?\)/g,'').replace(/\s*·.*$/,'').replace(/\s*\/\s*/,' ').trim(); }
+function colesItems(){ const a=[]; data.stores.forEach(s=>s.items.forEach(x=>{ if(!x.done) a.push(x.n); })); return a; }
+function openColes(){
+  const items=colesItems();
+  const links=items.map(n=>`<a class="coles-item" href="https://www.coles.com.au/search?q=${encodeURIComponent(clx(n))}" target="_blank" rel="noopener">${esc(n)}<span class="coles-go">Search ›</span></a>`).join('');
+  const m=document.getElementById('colesModal');
+  m.querySelector('.rc-sub').textContent=items.length+' items still to buy';
+  m.querySelector('.rc-body').innerHTML = items.length
+    ? `<div class="rc-note">Tap an item to open it on Coles in a new tab, then add it to your trolley. Tick items off in the app as you buy them.</div><button class="btn coles coles-copy" onclick="copyColes()">📋 Copy whole list</button>${links}`
+    : `<div class="empty">Nothing left to buy 🎉</div>`;
+  m.classList.add('show');
+}
+function closeColes(){ document.getElementById('colesModal').classList.remove('show'); }
+function copyColes(){ navigator.clipboard.writeText(colesItems().join('\n')).then(()=>{ const b=document.querySelector('.coles-copy'); if(b){ b.textContent='Copied ✓'; setTimeout(()=>b.textContent='📋 Copy whole list',1500); } }); }
 function showTab(t){
   ['list','plan','prep','log'].forEach(x=>{
     document.getElementById('tab-'+x).classList.toggle('active',t===x);
     document.getElementById('view-'+x).classList.toggle('hidden',t!==x);
   });
   document.querySelector('.addstore').classList.toggle('hidden',t!=='list');
+  document.getElementById('searchbar').classList.toggle('hidden',t!=='list');
   document.querySelectorAll('.toolbar').forEach(el=>el.classList.toggle('hidden',t!=='list'));
   if(t==='plan') renderPlan();
   if(t==='prep') renderPrep();
 }
+let searchQ='';
+function doSearch(v){ searchQ=(v||'').trim().toLowerCase(); document.getElementById('searchbar').classList.toggle('has',!!searchQ); render(); }
+function clearSearch(){ searchQ=''; const i=document.getElementById('search'); if(i)i.value=''; document.getElementById('searchbar').classList.remove('has'); render(); }
+function hl(txt){ if(!searchQ) return esc(txt); const i=txt.toLowerCase().indexOf(searchQ); if(i<0) return esc(txt); return esc(txt.slice(0,i))+'<mark>'+esc(txt.slice(i,i+searchQ.length))+'</mark>'+esc(txt.slice(i+searchQ.length)); }
 function dishLink(name){ return `<span class="dish" onclick="event.stopPropagation();openRecipe('${name}')">${name}</span>`; }
 
 /* ===== Meal plan ===== */

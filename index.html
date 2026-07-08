@@ -179,7 +179,13 @@
   .cs-v.lo{ color:#0f766e; } .cs-v.hi{ color:#b91c1c; }
   .sub-cost{ font-size:15px; font-weight:800; color:var(--teal); cursor:pointer; }
   .sub-cost.none{ font-size:12px; font-weight:700; color:var(--muted); }
-  .sub-meta{ font-size:11px; color:var(--muted); padding:8px 15px 4px; }
+  .sub-meta{ font-size:11px; color:var(--muted); padding:8px 15px 4px; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  .photo-wrap{ display:flex; align-items:center; gap:8px; }
+  .photo-act{ font-size:12px; font-weight:700; color:var(--teal); cursor:pointer; }
+  .photo-act.add{ color:#b45309; }
+  .bill-thumb{ width:40px; height:40px; object-fit:cover; border-radius:7px; border:1px solid var(--line); cursor:pointer; }
+  .photo-full{ max-width:94%; max-height:90vh; border-radius:12px; box-shadow:0 8px 40px rgba(0,0,0,.4); }
+  #photoModal.show{ display:flex; }
 </style>
 </head>
 <body>
@@ -215,7 +221,7 @@
   <div id="view-log" class="hidden"></div>
 
   <div class="toolbar">
-    <button class="btn submit" onclick="submitList()">✅ Submit shop &amp; log the bill</button>
+    <button class="btn submit" onclick="submitList()">✅ Submit shop</button>
   </div>
   <div class="toolbar">
     <button class="btn coles" onclick="openColes()">🛒 Send list to Coles</button>
@@ -260,6 +266,9 @@
     </div>
   </div>
 </div>
+
+<input id="billPhoto" type="file" accept="image/*" capture="environment" style="display:none" onchange="onBillPhoto(this)">
+<div id="photoModal" class="rc-overlay" onclick="closePhoto()"><img class="photo-full" alt="bill"></div>
 
 <div id="askModal" class="rc-overlay" onclick="if(event.target===this)askCancel()">
   <div class="rc-card" style="max-width:360px">
@@ -406,7 +415,7 @@ function esc(s){ return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>
 function renderLog(){
   const log=document.getElementById('view-log');
   const subs=(data.submissions||[]);
-  if(!subs.length){ log.innerHTML=`<div class="empty">No submitted shops yet.<br>Tick what you bought, tap “Submit shop”, and add the bill total — it’ll be logged here so you can compare costs over time.</div>`; return; }
+  if(!subs.length){ log.innerHTML=`<div class="empty">No submitted shops yet.<br>Tick what you bought and tap “Submit shop”. You can add a bill photo or a total afterwards to compare over time.</div>`; return; }
   const costs=subs.filter(s=>typeof s.cost==='number').map(s=>s.cost);
   let summary='';
   if(costs.length){
@@ -421,10 +430,13 @@ function renderLog(){
   log.innerHTML = summary + subs.map((s,i)=>{
     const cost = (typeof s.cost==='number')
       ? `<span class="sub-cost" onclick="editSubCost(${i})">$${s.cost.toFixed(2)}</span>`
-      : `<span class="sub-cost none" onclick="editSubCost(${i})">+ add bill</span>`;
+      : `<span class="sub-cost none" onclick="editSubCost(${i})">+ add total</span>`;
+    const photo = s.photo
+      ? `<img class="bill-thumb" src="${s.photo}" onclick="viewPhoto(${i})"><span class="photo-act" onclick="delPhoto(${i})">remove</span>`
+      : `<span class="photo-act add" onclick="addPhoto(${i})">📷 Add bill photo</span>`;
     const items=(s.items||[]).map(x=>`<div class="day-item"><span>${esc(x.n)}</span><span class="st">${esc((x.store||'').replace(/^[^ ]+ /,''))}</span></div>`).join('');
     return `<div class="day"><div class="day-head"><span>${fmtDate(s.ts)} · ${fmtTime(s.ts)}</span>${cost}</div>
-      <div class="sub-meta">${(s.items||[]).length} items · tap the amount to edit</div>${items}</div>`;
+      <div class="sub-meta"><span>${(s.items||[]).length} items</span><span class="photo-wrap">${photo}</span></div>${items}</div>`;
   }).join('');
 }
 
@@ -463,7 +475,7 @@ function askInput(title, value, cb, opts){
   const inp=document.getElementById('askInput'); inp.style.display='block';
   inp.value=value||''; inp.placeholder=opts.placeholder||''; inp.inputMode=opts.numeric?'decimal':'text';
   const ok=document.getElementById('askOk'); ok.textContent=opts.okText||'Save';
-  ok.onclick=()=>{ const v=inp.value; askClose(); if(_askCb)_askCb(v); };
+  ok.onclick=()=>{ const v=inp.value; const cb=_askCb; askClose(); if(cb)cb(v); };
   inp.onkeydown=(e)=>{ if(e.key==='Enter') ok.onclick(); };
   document.getElementById('askModal').classList.add('show'); setTimeout(()=>inp.focus(),60);
 }
@@ -472,7 +484,7 @@ function askConfirm(title,msg,cb){
   document.getElementById('askTitle').textContent=title;
   document.getElementById('askMsg').textContent=msg||'';
   document.getElementById('askInput').style.display='none';
-  const ok=document.getElementById('askOk'); ok.textContent='Confirm'; ok.onclick=()=>{ askClose(); if(_askCb)_askCb(true); };
+  const ok=document.getElementById('askOk'); ok.textContent='Confirm'; ok.onclick=()=>{ const cb=_askCb; askClose(); if(cb)cb(true); };
   document.getElementById('askModal').classList.add('show');
 }
 function askInfo(title,msg){
@@ -490,20 +502,35 @@ function askClose(){ document.getElementById('askModal').classList.remove('show'
 function isColesItem(x){ return /coles/i.test(x.store||'') || /coles/i.test(x.d||''); }
 function submitList(){
   const items=[]; data.stores.forEach(s=>s.items.forEach(x=>{ if(x.done) items.push({n:x.n, d:x.d||'', store:s.name}); }));
-  if(!items.length){ askInfo('Nothing ticked yet','Tick the items you bought, then submit — they’ll be saved to your Order Log.'); return; }
+  if(!items.length){ askInfo('Nothing ticked yet','Tick the items you bought, then tap Submit — they’ll be saved to your Order Log.'); return; }
   const colesNames = items.filter(isColesItem).map(x=>x.n);
-  askInput('Submit shop — total bill?', '', v=>{
-    const c=parseFloat(String(v).replace(/[^0-9.]/g,''));
-    data.submissions = data.submissions||[];
-    data.submissions.unshift({ts:Date.now(), items:items.map(x=>({n:x.n,store:x.store})), cost:isNaN(c)?null:c});
-    data.stores.forEach(s=>s.items.forEach(x=>{ x.done=false; x.ts=0; }));
-    saveLocal(); render(); schedulePush();
-    if(colesNames.length) showColes(colesNames, 'Coles items — add to your basket');
-    else showTab('log');
-  }, {placeholder:'$ total, e.g. 142.50 (optional)', okText:'Submit '+items.length+' items', numeric:true, msg:'Logs these '+items.length+' items with the bill total, unticks them for next time'+(colesNames.length?', then opens the '+colesNames.length+' Coles item(s) to add to your basket.':'.')});
+  data.submissions = data.submissions||[];
+  data.submissions.unshift({ts:Date.now(), items:items.map(x=>({n:x.n,store:x.store})), cost:null, photo:null});
+  data.stores.forEach(s=>s.items.forEach(x=>{ x.done=false; x.ts=0; }));
+  saveLocal(); render(); schedulePush();
+  if(colesNames.length) showColes(colesNames, 'Coles items — add to your basket');
+  else showTab('log');
 }
 function editSubCost(i){ const s=(data.submissions||[])[i]; if(!s) return;
-  askInput('Bill total for this shop', s.cost!=null?String(s.cost):'', v=>{ const c=parseFloat(String(v).replace(/[^0-9.]/g,'')); s.cost=isNaN(c)?null:c; saveLocal(); render(); schedulePush(); }, {placeholder:'$ total', okText:'Save', numeric:true}); }
+  askInput('Bill total (optional)', s.cost!=null?String(s.cost):'', v=>{ const c=parseFloat(String(v).replace(/[^0-9.]/g,'')); s.cost=isNaN(c)?null:c; saveLocal(); render(); schedulePush(); }, {placeholder:'$ total', okText:'Save', numeric:true}); }
+/* Bill photo (optional) */
+let _photoIdx=-1;
+function addPhoto(i){ _photoIdx=i; const inp=document.getElementById('billPhoto'); inp.value=''; inp.click(); }
+function onBillPhoto(inp){
+  const f=inp.files&&inp.files[0]; if(!f) return;
+  const rd=new FileReader();
+  rd.onload=()=>{ const img=new Image(); img.onload=()=>{
+    const max=1200; let w=img.width, h=img.height;
+    if(w>h && w>max){ h=Math.round(h*max/w); w=max; } else if(h>max){ w=Math.round(w*max/h); h=max; }
+    const c=document.createElement('canvas'); c.width=w; c.height=h; c.getContext('2d').drawImage(img,0,0,w,h);
+    const durl=c.toDataURL('image/jpeg',0.5);
+    const s=(data.submissions||[])[_photoIdx]; if(s){ s.photo=durl; saveLocal(); render(); schedulePush(); }
+  }; img.src=rd.result; };
+  rd.readAsDataURL(f);
+}
+function viewPhoto(i){ const s=(data.submissions||[])[i]; if(!s||!s.photo) return; const m=document.getElementById('photoModal'); m.querySelector('img').src=s.photo; m.classList.add('show'); }
+function closePhoto(){ document.getElementById('photoModal').classList.remove('show'); }
+function delPhoto(i){ const s=(data.submissions||[])[i]; if(!s) return; askConfirm('Remove bill photo?','', ()=>{ s.photo=null; saveLocal(); render(); schedulePush(); }); }
 
 /* ===== Send to Coles ===== */
 function clx(n){ return n.replace(/\s*[—–]\s.*$/,'').replace(/\s*\(.*?\)/g,'').replace(/\s*·.*$/,'').replace(/\s*\/\s*/,' ').trim(); }

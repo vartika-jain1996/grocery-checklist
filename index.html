@@ -5,8 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#0f766e">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Groceries">
-<title>Grocery Checklist</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="favicon-32.png">
+<title>Grocery &amp; Meal Planner</title>
 <style>
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   :root{
@@ -699,6 +704,7 @@ function resetAll(){ askConfirm('Reset all ticks?', 'Clears all ticks (keeps you
 render();
 if(cloudOn){ pull(); setInterval(pull,5000); document.addEventListener('visibilitychange',()=>{ if(!document.hidden) pull(); }); }
 else setSync('Local only');
+if('serviceWorker' in navigator){ window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{})); }
 </script>
 </body>
 </html>

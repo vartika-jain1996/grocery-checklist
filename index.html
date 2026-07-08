@@ -163,6 +163,18 @@
   .searchbar .s-clr{ color:var(--muted); font-size:14px; cursor:pointer; display:none; padding:2px 4px; }
   .searchbar.has .s-clr{ display:block; }
   mark{ background:#fde68a; color:inherit; border-radius:3px; padding:0 1px; }
+  .ask-in{ width:100%; font-size:16px; padding:11px 12px; border:1.5px solid var(--line); border-radius:10px; }
+  .ask-in:focus{ outline:none; border-color:var(--teal); }
+  .ask-msg{ font-size:13.5px; color:var(--muted); line-height:1.45; }
+  .btn.submit{ background:#0f766e; color:#fff; border-color:#0f766e; font-size:15px; padding:13px; }
+  .cost-sum{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin:12px 0; }
+  .cs-box{ background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 6px; text-align:center; }
+  .cs-l{ display:block; font-size:10px; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); font-weight:700; }
+  .cs-v{ display:block; font-size:15px; font-weight:800; margin-top:3px; }
+  .cs-v.lo{ color:#0f766e; } .cs-v.hi{ color:#b91c1c; }
+  .sub-cost{ font-size:15px; font-weight:800; color:var(--teal); cursor:pointer; }
+  .sub-cost.none{ font-size:12px; font-weight:700; color:var(--muted); }
+  .sub-meta{ font-size:11px; color:var(--muted); padding:8px 15px 4px; }
 </style>
 </head>
 <body>
@@ -197,6 +209,9 @@
   <div id="view-prep" class="hidden"></div>
   <div id="view-log" class="hidden"></div>
 
+  <div class="toolbar">
+    <button class="btn submit" onclick="submitList()">✅ Submit shop &amp; log the bill</button>
+  </div>
   <div class="toolbar">
     <button class="btn coles" onclick="openColes()">🛒 Send list to Coles</button>
   </div>
@@ -241,6 +256,20 @@
   </div>
 </div>
 
+<div id="askModal" class="rc-overlay" onclick="if(event.target===this)askCancel()">
+  <div class="rc-card" style="max-width:360px">
+    <div class="rc-top"><div class="rc-title" id="askTitle"></div><button class="rc-x" onclick="askCancel()">✕</button></div>
+    <div class="rc-body">
+      <input id="askInput" class="ask-in" placeholder="">
+      <div id="askMsg" class="ask-msg"></div>
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button class="btn" style="flex:1" onclick="askCancel()">Cancel</button>
+        <button class="btn primary" style="flex:1" id="askOk">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ==== CONFIG: Supabase cloud sync ==== */
 const SB_URL = "https://utcsxenvsnuywojtonll.supabase.co/rest/v1/checklist";
@@ -251,7 +280,7 @@ const EDIT_CODE = "2580";  // code required to unlock Edit mode
 const LKEY = "grocery_checklist_v3";
 let editing = false, pushTimer = null, pulling = false;
 
-const SEED = { updatedAt:0, stores:[
+const SEED = { updatedAt:0, submissions:[], stores:[
   { id:"g", name:"🏪 Indian Grocery", collapsed:false, items:[
     it("Ginger turmeric"), it("Low-fat paneer","~1.2kg · 4 of 5 dishes + burrito bowls"),
     it("Fresh turmeric + black pepper"),
@@ -272,13 +301,15 @@ const SEED = { updatedAt:0, stores:[
     it("Low-sodium / dark soy sauce"), it("Green chilli sauce"), it("Ketchup"), it("Cornflour"),
     it("Almonds, walnuts, mixed nuts"), it("Coconut water — 7+"), it("Stevia / sugar-free sweetener"),
     it("Spray oil / cooking oil") ]},
+  { id:"e", name:"🧻 Essentials", collapsed:false, items:[
+    it("Tissue box (square)","Coles"), it("Toilet paper","Costco") ]},
 ]};
 
 function uid(){ return Math.random().toString(36).slice(2,9); }
 function it(n,d){ return {id:uid(), n:n, d:d||"", done:false, ts:0}; }
 
 let data = load();
-function load(){ try{ const s=JSON.parse(localStorage.getItem(LKEY)); if(s&&s.stores) return s; }catch(e){} return JSON.parse(JSON.stringify(SEED)); }
+function load(){ try{ const s=JSON.parse(localStorage.getItem(LKEY)); if(s&&s.stores){ if(!s.submissions) s.submissions=[]; return s; } }catch(e){} return JSON.parse(JSON.stringify(SEED)); }
 function saveLocal(){ data.updatedAt=Date.now(); localStorage.setItem(LKEY, JSON.stringify(data)); }
 
 const cloudOn = SB_URL && !SB_URL.startsWith("__");
@@ -289,23 +320,38 @@ function fmtTime(ts){ return new Date(ts).toLocaleTimeString(undefined,{hour:'nu
 
 /* ---- cloud sync: whole-document, newest wins ---- */
 function schedulePush(){ if(!cloudOn) return; clearTimeout(pushTimer); pushTimer=setTimeout(push, 600); }
+function adoptRemote(remote){
+  if(!remote || !remote.stores) return false;
+  if((remote.updatedAt||0) > (data.updatedAt||0)){
+    if(!remote.submissions) remote.submissions=[];
+    data = remote; localStorage.setItem(LKEY, JSON.stringify(data)); render(); return true;
+  }
+  return false;
+}
 async function push(){
   if(!cloudOn) return;
   try{ setSync('Syncing…');
+    // Safety: if we're NOT actively editing and the cloud copy is newer than ours,
+    // adopt the cloud version instead of clobbering it with our older snapshot.
+    if(!editing){
+      const chk = await fetch(SB_URL+'?id=eq.main&select=data', {headers:sbHeaders()});
+      const arr = await chk.json();
+      const rem = (Array.isArray(arr) && arr[0]) ? arr[0].data : null;
+      if(rem && rem.stores && (rem.updatedAt||0) > (data.updatedAt||0)){ adoptRemote(rem); setSync('Synced ✓'); return; }
+    }
     await fetch(SB_URL, {method:'POST', headers:sbHeaders({Prefer:'resolution=merge-duplicates'}), body:JSON.stringify({id:'main', data:data})});
     setSync('Synced ✓');
   }catch(e){ setSync('Offline','off'); }
 }
 async function pull(){
   if(!cloudOn){ setSync('Local only'); return; }
-  if(pulling) return; pulling=true;
+  if(pulling || editing) return;   // don't overwrite the list while you're editing it
+  pulling=true;
   try{
     const r = await fetch(SB_URL+'?id=eq.main&select=data', {headers:sbHeaders()});
     const arr = await r.json();
     const remote = (Array.isArray(arr) && arr[0]) ? arr[0].data : null;
-    if(remote && remote.stores && (remote.updatedAt||0) > (data.updatedAt||0)){
-      data = remote; localStorage.setItem(LKEY, JSON.stringify(data)); render();
-    }
+    adoptRemote(remote);
     setSync('Synced ✓');
   }catch(e){ setSync('Offline','off'); }
   pulling=false;
@@ -353,16 +399,27 @@ function render(){
 function esc(s){ return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
 function renderLog(){
-  const log=document.getElementById('view-log'); const byDay={};
-  data.stores.forEach(store=> store.items.forEach(x=>{
-    if(x.done){ const k=new Date(x.ts).toDateString();
-      (byDay[k]=byDay[k]||[]).push({name:x.n,store:store.name,ts:x.ts}); }
-  }));
-  const days=Object.keys(byDay).sort((a,b)=>new Date(b)-new Date(a));
-  if(!days.length){ log.innerHTML=`<div class="empty">Nothing ordered yet.<br>Tick items and they'll be logged here by day.</div>`; return; }
-  log.innerHTML=days.map(day=>{ const items=byDay[day].sort((a,b)=>b.ts-a.ts);
-    return `<div class="day"><div class="day-head"><span>${fmtDate(items[0].ts)}</span><span>${items.length} item${items.length>1?'s':''}</span></div>
-      ${items.map(x=>`<div class="day-item"><span>${esc(x.name)} <span style="color:var(--muted)">· ${esc(x.store.replace(/^[^ ]+ /,''))}</span></span><span class="st">${fmtTime(x.ts)}</span></div>`).join('')}</div>`;
+  const log=document.getElementById('view-log');
+  const subs=(data.submissions||[]);
+  if(!subs.length){ log.innerHTML=`<div class="empty">No submitted shops yet.<br>Tick what you bought, tap “Submit shop”, and add the bill total — it’ll be logged here so you can compare costs over time.</div>`; return; }
+  const costs=subs.filter(s=>typeof s.cost==='number').map(s=>s.cost);
+  let summary='';
+  if(costs.length){
+    const avg=costs.reduce((a,b)=>a+b,0)/costs.length, min=Math.min(...costs), max=Math.max(...costs);
+    summary=`<div class="cost-sum">
+      <div class="cs-box"><span class="cs-l">Shops</span><span class="cs-v">${subs.length}</span></div>
+      <div class="cs-box"><span class="cs-l">Average</span><span class="cs-v">$${avg.toFixed(2)}</span></div>
+      <div class="cs-box"><span class="cs-l">Lowest</span><span class="cs-v lo">$${min.toFixed(2)}</span></div>
+      <div class="cs-box"><span class="cs-l">Highest</span><span class="cs-v hi">$${max.toFixed(2)}</span></div>
+    </div>`;
+  }
+  log.innerHTML = summary + subs.map((s,i)=>{
+    const cost = (typeof s.cost==='number')
+      ? `<span class="sub-cost" onclick="editSubCost(${i})">$${s.cost.toFixed(2)}</span>`
+      : `<span class="sub-cost none" onclick="editSubCost(${i})">+ add bill</span>`;
+    const items=(s.items||[]).map(x=>`<div class="day-item"><span>${esc(x.n)}</span><span class="st">${esc((x.store||'').replace(/^[^ ]+ /,''))}</span></div>`).join('');
+    return `<div class="day"><div class="day-head"><span>${fmtDate(s.ts)} · ${fmtTime(s.ts)}</span>${cost}</div>
+      <div class="sub-meta">${(s.items||[]).length} items · tap the amount to edit</div>${items}</div>`;
   }).join('');
 }
 
@@ -374,10 +431,10 @@ function collapseAll(){ const anyOpen=data.stores.some(s=>!s.collapsed); data.st
 function addItem(sid,input){ const v=(input.value||'').trim(); if(!v) return; findStore(sid).items.push(it(v)); input.value=''; saveLocal(); render(); schedulePush();
   const boxes=document.querySelectorAll('.additem input'); }
 function delItem(sid,iid){ const s=findStore(sid); s.items=s.items.filter(i=>i.id!==iid); saveLocal(); render(); schedulePush(); }
-function renameItem(sid,iid){ const x=findStore(sid).items.find(i=>i.id===iid); const v=prompt('Rename item:',x.n); if(v!==null){ x.n=v.trim()||x.n; saveLocal(); render(); schedulePush(); } }
-function renameStore(sid){ const s=findStore(sid); const v=prompt('Rename section:',s.name); if(v!==null){ s.name=v.trim()||s.name; saveLocal(); render(); schedulePush(); } }
-function delStore(sid){ const s=findStore(sid); if(!confirm('Delete section "'+s.name+'" and all its items?')) return; data.stores=data.stores.filter(x=>x.id!==sid); saveLocal(); render(); schedulePush(); }
-function addStore(){ const v=prompt('New section name (e.g. 🥩 Butcher):'); if(v===null) return; data.stores.push({id:uid(), name:v.trim()||'New section', collapsed:false, items:[]}); saveLocal(); render(); schedulePush(); }
+function renameItem(sid,iid){ const x=findStore(sid).items.find(i=>i.id===iid); askInput('Rename item', x.n, v=>{ x.n=(v||'').trim()||x.n; saveLocal(); render(); schedulePush(); }, {okText:'Save'}); }
+function renameStore(sid){ const s=findStore(sid); askInput('Rename section', s.name, v=>{ s.name=(v||'').trim()||s.name; saveLocal(); render(); schedulePush(); }, {okText:'Save'}); }
+function delStore(sid){ const s=findStore(sid); askConfirm('Delete section?', 'Delete "'+s.name+'" and all its items? This cannot be undone.', ()=>{ data.stores=data.stores.filter(x=>x.id!==sid); saveLocal(); render(); schedulePush(); }); }
+function addStore(){ askInput('New section name', '', v=>{ const name=(v||'').trim(); if(!name) return; data.stores.push({id:uid(), name:name, collapsed:false, items:[]}); saveLocal(); render(); schedulePush(); }, {placeholder:'e.g. 🥩 Butcher', okText:'Add section'}); }
 
 function toggleEdit(){
   if(!editing){ openPin(); return; }
@@ -392,21 +449,74 @@ function submitPin(){ const v=document.getElementById('pinInput').value.trim();
   if(v===EDIT_CODE){ closePin(); enterEdit(); }
   else{ document.getElementById('pinErr').textContent='Wrong code — try again.'; document.getElementById('pinInput').value=''; document.getElementById('pinInput').focus(); } }
 
+/* ===== In-app dialogs (replace blocked prompt/confirm) ===== */
+let _askCb=null;
+function askInput(title, value, cb, opts){
+  opts=opts||{}; _askCb=cb;
+  document.getElementById('askTitle').textContent=title;
+  document.getElementById('askMsg').textContent=opts.msg||'';
+  const inp=document.getElementById('askInput'); inp.style.display='block';
+  inp.value=value||''; inp.placeholder=opts.placeholder||''; inp.inputMode=opts.numeric?'decimal':'text';
+  const ok=document.getElementById('askOk'); ok.textContent=opts.okText||'Save';
+  ok.onclick=()=>{ const v=inp.value; askClose(); if(_askCb)_askCb(v); };
+  inp.onkeydown=(e)=>{ if(e.key==='Enter') ok.onclick(); };
+  document.getElementById('askModal').classList.add('show'); setTimeout(()=>inp.focus(),60);
+}
+function askConfirm(title,msg,cb){
+  _askCb=cb;
+  document.getElementById('askTitle').textContent=title;
+  document.getElementById('askMsg').textContent=msg||'';
+  document.getElementById('askInput').style.display='none';
+  const ok=document.getElementById('askOk'); ok.textContent='Confirm'; ok.onclick=()=>{ askClose(); if(_askCb)_askCb(true); };
+  document.getElementById('askModal').classList.add('show');
+}
+function askInfo(title,msg){
+  _askCb=null;
+  document.getElementById('askTitle').textContent=title;
+  document.getElementById('askMsg').textContent=msg||'';
+  document.getElementById('askInput').style.display='none';
+  const ok=document.getElementById('askOk'); ok.textContent='OK'; ok.onclick=askClose;
+  document.getElementById('askModal').classList.add('show');
+}
+function askCancel(){ askClose(); }
+function askClose(){ document.getElementById('askModal').classList.remove('show'); _askCb=null; }
+
+/* ===== Submit shop + bill logging ===== */
+function isColesItem(x){ return /coles/i.test(x.store||'') || /coles/i.test(x.d||''); }
+function submitList(){
+  const items=[]; data.stores.forEach(s=>s.items.forEach(x=>{ if(x.done) items.push({n:x.n, d:x.d||'', store:s.name}); }));
+  if(!items.length){ askInfo('Nothing ticked yet','Tick the items you bought, then submit — they’ll be saved to your Order Log.'); return; }
+  const colesNames = items.filter(isColesItem).map(x=>x.n);
+  askInput('Submit shop — total bill?', '', v=>{
+    const c=parseFloat(String(v).replace(/[^0-9.]/g,''));
+    data.submissions = data.submissions||[];
+    data.submissions.unshift({ts:Date.now(), items:items.map(x=>({n:x.n,store:x.store})), cost:isNaN(c)?null:c});
+    data.stores.forEach(s=>s.items.forEach(x=>{ x.done=false; x.ts=0; }));
+    saveLocal(); render(); schedulePush();
+    if(colesNames.length) showColes(colesNames, 'Coles items — add to your basket');
+    else showTab('log');
+  }, {placeholder:'$ total, e.g. 142.50 (optional)', okText:'Submit '+items.length+' items', numeric:true, msg:'Logs these '+items.length+' items with the bill total, unticks them for next time'+(colesNames.length?', then opens the '+colesNames.length+' Coles item(s) to add to your basket.':'.')});
+}
+function editSubCost(i){ const s=(data.submissions||[])[i]; if(!s) return;
+  askInput('Bill total for this shop', s.cost!=null?String(s.cost):'', v=>{ const c=parseFloat(String(v).replace(/[^0-9.]/g,'')); s.cost=isNaN(c)?null:c; saveLocal(); render(); schedulePush(); }, {placeholder:'$ total', okText:'Save', numeric:true}); }
+
 /* ===== Send to Coles ===== */
 function clx(n){ return n.replace(/\s*[—–]\s.*$/,'').replace(/\s*\(.*?\)/g,'').replace(/\s*·.*$/,'').replace(/\s*\/\s*/,' ').trim(); }
 function colesItems(){ const a=[]; data.stores.forEach(s=>s.items.forEach(x=>{ if(!x.done) a.push(x.n); })); return a; }
-function openColes(){
-  const items=colesItems();
-  const links=items.map(n=>`<a class="coles-item" href="https://www.coles.com.au/search?q=${encodeURIComponent(clx(n))}" target="_blank" rel="noopener">${esc(n)}<span class="coles-go">Search ›</span></a>`).join('');
+let _colesNames=[];
+function openColes(){ showColes(colesItems(), 'items still to buy'); }
+function showColes(names, label){
+  _colesNames=names;
+  const links=names.map(n=>`<a class="coles-item" href="https://www.coles.com.au/search?q=${encodeURIComponent(clx(n))}" target="_blank" rel="noopener">${esc(n)}<span class="coles-go">Add ›</span></a>`).join('');
   const m=document.getElementById('colesModal');
-  m.querySelector('.rc-sub').textContent=items.length+' items still to buy';
-  m.querySelector('.rc-body').innerHTML = items.length
-    ? `<div class="rc-note">Tap an item to open it on Coles in a new tab, then add it to your trolley. Tick items off in the app as you buy them.</div><button class="btn coles coles-copy" onclick="copyColes()">📋 Copy whole list</button>${links}`
-    : `<div class="empty">Nothing left to buy 🎉</div>`;
+  m.querySelector('.rc-sub').textContent=names.length+' '+(label||'items');
+  m.querySelector('.rc-body').innerHTML = names.length
+    ? `<div class="rc-note">Tap each item to open it on the Coles web app and add it to your basket. Coles doesn’t let outside apps fill the basket directly, so this opens each product ready to add.</div><button class="btn coles coles-copy" onclick="copyColes()">📋 Copy list</button>${links}`
+    : `<div class="empty">No Coles items here 🎉</div>`;
   m.classList.add('show');
 }
 function closeColes(){ document.getElementById('colesModal').classList.remove('show'); }
-function copyColes(){ navigator.clipboard.writeText(colesItems().join('\n')).then(()=>{ const b=document.querySelector('.coles-copy'); if(b){ b.textContent='Copied ✓'; setTimeout(()=>b.textContent='📋 Copy whole list',1500); } }); }
+function copyColes(){ navigator.clipboard.writeText(_colesNames.join('\n')).then(()=>{ const b=document.querySelector('.coles-copy'); if(b){ b.textContent='Copied ✓'; setTimeout(()=>b.textContent='📋 Copy list',1500); } }); }
 function showTab(t){
   ['list','plan','prep','log'].forEach(x=>{
     document.getElementById('tab-'+x).classList.toggle('active',t===x);
@@ -584,8 +694,7 @@ function renderPrep(){
       <div class="prep-row">🥛 Vartika optional: ½ scoop whey in warm milk in the evening (top-up)</div>
     </div>`;
 }
-function resetAll(){ if(!confirm('Clear all ticks (keeps your items)?')) return;
-  data.stores.forEach(s=>s.items.forEach(x=>{ x.done=false; x.ts=0; })); saveLocal(); render(); schedulePush(); }
+function resetAll(){ askConfirm('Reset all ticks?', 'Clears all ticks (keeps your items).', ()=>{ data.stores.forEach(s=>s.items.forEach(x=>{ x.done=false; x.ts=0; })); saveLocal(); render(); schedulePush(); }); }
 
 render();
 if(cloudOn){ pull(); setInterval(pull,5000); document.addEventListener('visibilitychange',()=>{ if(!document.hidden) pull(); }); }

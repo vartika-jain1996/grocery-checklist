@@ -445,7 +445,10 @@ async function afterLogin(){
     if(!window._syncInt){ window._syncInt=setInterval(pull,5000); document.addEventListener('visibilitychange',()=>{ if(!document.hidden) pull(); }); }
   }catch(e){ setSync('Offline','off'); }
 }
-function showLogin(){ cloudOn=false; activeListId=null; document.getElementById('authGate').classList.add('show'); document.getElementById('acctBtn').style.display='none'; }
+function showLogin(){ cloudOn=false; activeListId=null;
+  const em=document.getElementById('authEmail'), pw=document.getElementById('authPass');
+  if(em) em.value=''; if(pw) pw.value=''; authMsg('');
+  document.getElementById('authGate').classList.add('show'); document.getElementById('acctBtn').style.display='none'; }
 
 /* auth actions */
 function authEmail(){ return (document.getElementById('authEmail').value||'').trim(); }

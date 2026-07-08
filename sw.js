@@ -1,5 +1,5 @@
 /* Grocery & Meal Planner service worker */
-const CACHE = 'grocery-v1';
+const CACHE = 'grocery-v2';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './favicon-32.png'];
 
 self.addEventListener('install', e => {

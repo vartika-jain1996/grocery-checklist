@@ -85,6 +85,34 @@
   .btn.warn{ color:#b91c1c; border-color:#f0c9c9; background:#fef2f2; }
   .hidden{ display:none; }
   .footnote{ text-align:center; font-size:11px; color:var(--muted); margin-top:18px; padding:0 10px; }
+
+  /* Meal plan */
+  .daypills{ display:flex; gap:6px; overflow-x:auto; padding:4px 0 10px; -webkit-overflow-scrolling:touch; }
+  .daypill{ flex:none; min-width:46px; text-align:center; padding:9px 10px; border-radius:10px; background:var(--card); border:1px solid var(--line); font-size:13px; font-weight:700; color:var(--muted); cursor:pointer; }
+  .daypill.active{ background:var(--teal); color:#fff; border-color:var(--teal); }
+  .daypill.today:not(.active){ border-color:var(--teal); color:var(--teal); }
+  .plan-head{ font-size:17px; font-weight:700; margin:4px 2px 10px; }
+  .plan-head .totals{ display:block; font-size:11.5px; font-weight:600; color:var(--muted); margin-top:3px; }
+  .timeline{ background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+  .tl-item{ display:flex; gap:11px; padding:12px 13px; border-bottom:1px solid var(--line); }
+  .tl-item:last-child{ border-bottom:none; }
+  .tl-time{ flex:none; width:44px; font-size:12px; font-weight:700; color:var(--teal); padding-top:2px; }
+  .tl-body{ flex:1; min-width:0; }
+  .tl-slot{ font-size:13.5px; font-weight:700; margin-bottom:5px; }
+  .tl-both{ font-size:12.5px; color:var(--muted); }
+  .tl-split{ display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+  .tl-p{ font-size:11.5px; line-height:1.35; color:var(--ink); background:var(--bg); border-radius:8px; padding:7px 8px; }
+  .who{ display:block; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.4px; margin-bottom:3px; }
+  .who.a{ color:#0f766e; } .who.v{ color:#b45309; }
+  .everyday, .glance-wrap{ background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin-top:12px; }
+  .ed-title{ font-size:13px; font-weight:800; margin-bottom:8px; }
+  .ed-item{ font-size:12.5px; color:var(--muted); padding:3px 0; }
+  .gl-row{ display:grid; grid-template-columns:36px 1fr 1fr; gap:8px; align-items:center; padding:9px 0; border-top:1px solid var(--line); font-size:11.5px; cursor:pointer; }
+  .gl-row:first-child{ border-top:none; }
+  .gl-row.today{ background:var(--teal-soft); margin:0 -14px; padding-left:14px; padding-right:14px; }
+  .gl-day{ font-weight:800; color:var(--teal); }
+  .gl-meal{ color:var(--ink); }
+  .legend{ font-size:11px; color:var(--muted); margin-top:10px; line-height:1.4; }
 </style>
 </head>
 <body>
@@ -101,13 +129,15 @@
 </header>
 
 <div class="tabs">
-  <div class="tab active" id="tab-list" onclick="showTab('list')">Shopping List</div>
+  <div class="tab active" id="tab-list" onclick="showTab('list')">Shopping</div>
+  <div class="tab" id="tab-plan" onclick="showTab('plan')">Meal Plan</div>
   <div class="tab" id="tab-log" onclick="showTab('log')">Order Log</div>
 </div>
 
 <main>
   <div id="view-list"></div>
   <button class="addstore" onclick="addStore()">＋ Add section</button>
+  <div id="view-plan" class="hidden"></div>
   <div id="view-log" class="hidden"></div>
 
   <div class="toolbar">
@@ -257,11 +287,71 @@ function addStore(){ const v=prompt('New section name (e.g. 🥩 Butcher):'); if
 function toggleEdit(){ editing=!editing; document.body.classList.toggle('editing',editing);
   document.getElementById('editBtn').textContent = editing?'✓ Done editing':'✏️ Edit list'; render(); }
 function showTab(t){
-  document.getElementById('tab-list').classList.toggle('active',t==='list');
-  document.getElementById('tab-log').classList.toggle('active',t==='log');
-  document.getElementById('view-list').classList.toggle('hidden',t!=='list');
+  ['list','plan','log'].forEach(x=>{
+    document.getElementById('tab-'+x).classList.toggle('active',t===x);
+    document.getElementById('view-'+x).classList.toggle('hidden',t!==x);
+  });
   document.querySelector('.addstore').classList.toggle('hidden',t!=='list');
-  document.getElementById('view-log').classList.toggle('hidden',t!=='log');
+  document.querySelectorAll('.toolbar').forEach(el=>el.classList.toggle('hidden',t!=='list'));
+  if(t==='plan') renderPlan();
+}
+
+/* ===== Meal plan ===== */
+const PLAN_DAYS = [
+  {d:"Mon", full:"Monday",    aLunch:"Chilli Paneer Gravy Style", dinner:"Kadhai Paneer"},
+  {d:"Tue", full:"Tuesday",   aLunch:"Egg Curry",                 dinner:"Shahi Paneer"},
+  {d:"Wed", full:"Wednesday", aLunch:"Achari Paneer Tikka",       dinner:"Chilli Paneer Gravy Style"},
+  {d:"Thu", full:"Thursday",  aLunch:"Kadhai Paneer",             dinner:"Egg Curry"},
+  {d:"Fri", full:"Friday",    aLunch:"Shahi Paneer",              dinner:"Achari Paneer Tikka"},
+  {d:"Sat", full:"Saturday",  aLunch:"Chilli Paneer Gravy Style", dinner:"Kadhai Paneer"},
+  {d:"Sun", full:"Sunday",    aLunch:"Egg Curry",                 dinner:"Shahi Paneer"},
+];
+const PAGES = {"Kadhai Paneer":"p.36","Shahi Paneer":"p.39","Chilli Paneer Gravy Style":"p.34","Egg Curry":"p.50","Achari Paneer Tikka":"p.15"};
+function pg(n){ return PAGES[n] ? " ("+PAGES[n]+")" : ""; }
+function todayIdx(){ const g=new Date().getDay(); return g===0?6:g-1; } // Mon=0 … Sun=6
+let planDay = todayIdx();
+function setPlanDay(i){ planDay=i; renderPlan(); }
+
+function renderPlan(){
+  const v=document.getElementById('view-plan');
+  const ti=todayIdx();
+  const pills = PLAN_DAYS.map((x,i)=>`<div class="daypill ${i===planDay?'active':''} ${i===ti?'today':''}" onclick="setPlanDay(${i})">${x.d}</div>`).join('');
+  const day = PLAN_DAYS[planDay];
+  const rows = [
+    {t:"7:00",  slot:"Ritual waters", both:"Warm lemon + turmeric-ginger + jeera water — all together on waking"},
+    {t:"7:30",  slot:"Meal 1 · Berry Sweet Smoothie", a:"150g Greek yogurt · 250ml milk · 180g berries · whey + collagen · saffron<br><b>~55g P / 430 kcal</b>", v:"150g Greek yogurt · 150ml milk · 120g berries · whey + collagen · saffron<br><b>~52g P / 360 kcal</b>"},
+    {t:"10:30", slot:"Meal 2 · Coffee + nuts", a:"Coffee (skim, stevia) + 8 almonds<br><b>~3g P / 90 kcal</b>", v:"Coffee (skim, stevia) + 3 walnut halves<br><b>~3g P / 70 kcal</b>"},
+    {t:"12:30", slot:"Meal 3 · Lunch", a:day.aLunch+pg(day.aLunch)+"<br><b>~38g P / 520 kcal</b>", v:"Mexican Burrito Bowl (constant)<br><b>~33g P / 430 kcal</b>"},
+    {t:"4:30",  slot:"Workout", both:"Training block"},
+    {t:"5:30",  slot:"Meal 4 · Post-workout", a:"1 coconut water + 8 nuts<br><b>~4g P / 110 kcal</b>", v:"1 coconut water + 6 almonds<br><b>~4g P / 90 kcal</b>"},
+    {t:"7:30",  slot:"Meal 5 · Dinner (shared)", a:day.dinner+pg(day.dinner)+"<br><b>~44g P / 560 kcal</b>", v:day.dinner+"<br><b>~40g P / 420 kcal</b>"},
+    {t:"9:00",  slot:"Optional", v:"½ scoop whey in warm milk — Vartika top-up"},
+  ];
+  const tl = rows.map(r=>{
+    const body = r.both
+      ? `<div class="tl-both">${r.both}</div>`
+      : `<div class="tl-split"><div class="tl-p"><span class="who a">Akarsh</span>${r.a||'—'}</div><div class="tl-p"><span class="who v">Vartika</span>${r.v||'—'}</div></div>`;
+    return `<div class="tl-item"><div class="tl-time">${r.t}</div><div class="tl-body"><div class="tl-slot">${r.slot}</div>${body}</div></div>`;
+  }).join('');
+  const glance = PLAN_DAYS.map((x,i)=>`<div class="gl-row ${i===ti?'today':''}" onclick="setPlanDay(${i})">
+      <span class="gl-day">${x.d}</span><span class="gl-meal">🥘 ${x.aLunch}</span><span class="gl-meal">🍽 ${x.dinner}</span>
+    </div>`).join('');
+  v.innerHTML = `
+    <div class="daypills">${pills}</div>
+    <div class="plan-head">${day.full}${planDay===ti?' · Today':''}
+      <span class="totals">Akarsh ~144g P / ~1710 kcal · Vartika ~132g P / ~1370 kcal (+ top-up)</span></div>
+    <div class="timeline">${tl}</div>
+    <div class="everyday">
+      <div class="ed-title">Every day, both of you — the constants</div>
+      <div class="ed-item">🌅 Ritual waters on waking · collagen in the smoothie · multivitamin with Meal 1</div>
+      <div class="ed-item">🥤 Meal 1 smoothie · ☕ Meal 2 coffee + nuts · 🥥 Meal 4 coconut water + nuts</div>
+      <div class="ed-item">🌯 Vartika's lunch is the Mexican Burrito Bowl every day</div>
+    </div>
+    <div class="glance-wrap">
+      <div class="ed-title">Week at a glance — only lunch & dinner change</div>
+      <div class="glance">${glance}</div>
+      <div class="legend">5 dishes on rotation, each ~3× a week: Kadhai Paneer · Shahi Paneer · Chilli Paneer · Egg Curry · Achari Paneer Tikka. Tap a day to jump to it.</div>
+    </div>`;
 }
 function resetAll(){ if(!confirm('Clear all ticks (keeps your items)?')) return;
   data.stores.forEach(s=>s.items.forEach(x=>{ x.done=false; x.ts=0; })); saveLocal(); render(); schedulePush(); }

@@ -496,7 +496,10 @@
     <div class="ob-prog"><i id="obProg"></i></div>
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
       <div class="ob-step-c" id="obStepC"></div>
-      <span class="settings-link" onclick="goImport()">📎 Have a plan? Upload</span>
+      <div style="display:flex;gap:16px;align-items:center">
+        <span class="settings-link" onclick="goImport()">📎 Upload a plan</span>
+        <span class="settings-link" onclick="obSkip()">Skip →</span>
+      </div>
     </div>
   </div>
   <div class="ob-body" id="obBody"></div>
@@ -1344,7 +1347,7 @@ async function pollSubscription(tries){
 /* ---- onboarding wizard ---- */
 let obIndex=0;
 const OB_REFERRAL = ['TikTok','Instagram','Facebook','App Store','Google search','Friend or family','YouTube','Podcast','Other'];
-const OB_STEPS=[obStepHousehold, obStepAbout, obStepEnergy, obStepGoals, obStepDiet, obStepCuisine, obStepAllergies, obStepDislikes, obStepSkill, obStepGadgets, obStepPantry, obStepStores, obStepReferral];
+const OB_STEPS=[obStepAbout, obStepEnergy, obStepGoals, obStepDiet, obStepCuisine, obStepAllergies, obStepDislikes, obStepSkill, obStepGadgets, obStepPantry, obStepStores, obStepReferral];
 function startOnboarding(edit){
   obEditMode=!!edit;
   ob = edit && profile && profile.data ? JSON.parse(JSON.stringify(profile.data)) : newObState();
@@ -1458,6 +1461,13 @@ function obStep(k,d){ ob.household[k]=Math.max(k==='adults'?1:0, (ob.household[k
 function obAddStore(){ askInput('Add a store','', v=>{ v=(v||'').trim(); if(!v)return; if(!ob.stores.includes(v))ob.stores.push(v); renderOb(); }, {placeholder:'e.g. Local greengrocer', okText:'Add'}); }
 function obBack(){ if(obIndex>0){ obIndex--; renderOb(); } }
 function obClose(){ document.getElementById('obGate').classList.remove('show'); if(profile&&profile.data.onboarded) applyGate(); }
+function obSkip(){
+  askConfirm('Skip setup for now?','You can generate a personalised plan or upload your own any time from the Meals tab.', ()=>{
+    if(profile){ profile.data = Object.assign({}, profile.data||{}, ob, {onboarded:true}); saveProfileData(); }
+    document.getElementById('obGate').classList.remove('show');
+    applyGate&&applyGate(); showTab('list');
+  });
+}
 function obNext(){
   const cur=OB_STEPS[obIndex], p=ob.person;
   if(cur===obStepAbout && (!p.sex||!p.age||!p.heightCm||!p.weightKg)){ askInfo('A few details needed','Please add your sex, age, height and weight so we can size your meals and energy needs.'); return; }

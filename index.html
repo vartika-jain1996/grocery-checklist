@@ -38,6 +38,8 @@
   .auth-msg{ font-size:12.5px; color:#b91c1c; margin-top:10px; min-height:16px; line-height:1.4; }
   .auth-msg.ok{ color:var(--teal); }
   .auth-hint{ font-size:11px; color:var(--muted); margin-top:7px; }
+  .google-btn{ width:100%; display:flex; align-items:center; justify-content:center; gap:9px; background:#fff; color:#1a2230; border:1.5px solid var(--line); font-weight:700; padding:12px; }
+  .g-icon{ display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%; background:conic-gradient(from -45deg,#ea4335 0 25%,#fbbc05 0 50%,#34a853 0 75%,#4285f4 0); color:#fff; font-weight:800; font-size:12px; }
   .acct-email{ font-size:13px; color:var(--muted); margin-bottom:4px; }
   .share-row{ display:flex; gap:8px; }
   .share-row .ask-in{ flex:1; font-size:11px; }
@@ -296,6 +298,8 @@
     <div class="auth-logo">🛒</div>
     <h2>Grocery &amp; Meal Planner</h2>
     <p class="auth-sub">Sign in to your private list</p>
+    <button class="btn google-btn" onclick="doGoogle()"><span class="g-icon">G</span> Sign in with Google</button>
+    <div class="auth-or" id="emailToggle">— or use email —</div>
     <input id="authEmail" type="email" autocomplete="email" placeholder="Email" class="auth-in">
     <input id="authPass" type="password" autocomplete="current-password" placeholder="Password (6+ characters)" class="auth-in" onkeydown="if(event.key==='Enter')doSignIn()">
     <div class="auth-row"><button class="btn primary" style="flex:1" onclick="doSignIn()">Sign in</button><button class="btn" style="flex:1" onclick="doSignUp()">Create account</button></div>
@@ -454,6 +458,7 @@ function showLogin(){ cloudOn=false; activeListId=null;
 function authEmail(){ return (document.getElementById('authEmail').value||'').trim(); }
 function authMsg(t,ok){ const e=document.getElementById('authMsg'); e.textContent=t||''; e.className='auth-msg'+(ok?' ok':''); }
 function validEmail(e){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e); }
+async function doGoogle(){ authMsg('Redirecting to Google…',true); try{ const {error}=await sb.auth.signInWithOAuth({provider:'google', options:{redirectTo:location.href.split('#')[0]}}); if(error) authMsg(friendlyAuthError(error.message)); }catch(e){ authMsg(friendlyAuthError(e.message)); } }
 function friendlyAuthError(msg){
   const m=(msg||'').toLowerCase();
   if(m.includes('invalid login')||m.includes('invalid credentials')) return 'Wrong email or password.';

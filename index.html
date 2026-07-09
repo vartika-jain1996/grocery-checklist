@@ -595,7 +595,7 @@ function delStore(sid){ const s=findStore(sid); askConfirm('Delete section?', 'D
 function addStore(){ askInput('New section name', '', v=>{ const name=(v||'').trim(); if(!name) return; data.stores.push({id:uid(), name:name, collapsed:false, items:[]}); saveLocal(); render(); schedulePush(); }, {placeholder:'e.g. 🥩 Butcher', okText:'Add section'}); }
 
 function toggleEdit(){
-  if(!editing){ openPin(); return; }
+  if(!editing){ enterEdit(); return; }
   editing=false; document.body.classList.remove('editing');
   document.getElementById('editBtn').textContent='✏️ Edit list'; render();
 }

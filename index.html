@@ -407,7 +407,8 @@
     <div class="wc-feat"><span class="ck">✓</span> Track</div>
     <div class="wc-all">Your whole week of food — personalised, in one place.</div>
     <button class="wc-cta" onclick="goAuth('signup')">Get started</button>
-    <div class="wc-login">Already have an account? <b onclick="goAuth('login')">Login</b></div>
+    <div class="wc-login" style="margin-top:12px">Already have a meal plan? <b onclick="goImport()">Upload it instead</b></div>
+    <div class="wc-login" style="margin-top:8px">Already have an account? <b onclick="goAuth('login')">Login</b></div>
   </div>
   <div class="wc-strip">
     <div class="wc-tile">🥗</div><div class="wc-tile">🍜</div><div class="wc-tile">🍲</div><div class="wc-tile">🥘</div>
@@ -493,7 +494,10 @@
 <div id="obGate" class="ob">
   <div class="ob-top">
     <div class="ob-prog"><i id="obProg"></i></div>
-    <div class="ob-step-c" id="obStepC"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <div class="ob-step-c" id="obStepC"></div>
+      <span class="settings-link" onclick="goImport()">📎 Have a plan? Upload</span>
+    </div>
   </div>
   <div class="ob-body" id="obBody"></div>
   <div class="ob-foot" id="obFoot"></div>
@@ -662,6 +666,11 @@ function setAuthMode(m){
 }
 function goAuth(m){ document.getElementById('welcome').classList.remove('show'); document.getElementById('authGate').classList.add('show'); setAuthMode(m||'signup'); }
 function doAuthPrimary(){ if(_authMode==='signup') doSignUp(); else doSignIn(); }
+function goImport(){
+  const w=document.getElementById('welcome'); if(w) w.classList.remove('show');
+  if(cloudOn && session){ openImport(); }
+  else { window._pendingImport=true; goAuth('signup'); }
+}
 
 /* auth actions */
 function authEmail(){ return (document.getElementById('authEmail').value||'').trim(); }
@@ -1120,6 +1129,7 @@ async function sendPlan(payload){
     if(error){ importMsg('Import failed: '+(error.message||'the scanner may not be set up')); return; }
     if(!res || !(Array.isArray(res.days)&&res.days.length)){ importMsg('Couldn’t find a meal plan in that. Try a clearer file or paste the text.'); return; }
     applyMealplan(res); closeImport(); setSync('Synced ✓');
+    if(profile && profile.data && !profile.data.onboarded){ profile.data.onboarded=true; saveProfileData(); const g=document.getElementById('obGate'); if(g) g.classList.remove('show'); applyGate&&applyGate(); }
   }catch(e){ importMsg('Import failed. Please try again.'); }
 }
 function applyMealplan(mp){
@@ -1246,7 +1256,10 @@ async function loadProfileAndGate(){
   const qs = new URLSearchParams(location.search);
   if(qs.get('checkout')==='success'){ history.replaceState(null,'',location.pathname); await pollSubscription(); }
 
-  if(!profile.data.onboarded){ startOnboarding(false); }
+  if(!profile.data.onboarded){
+    if(window._pendingImport){ window._pendingImport=false; applyGate(); openImport(); }
+    else startOnboarding(false);
+  }
   else { applyGate(); }
 }
 

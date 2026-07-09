@@ -328,6 +328,21 @@
 </div>
 
 <input id="billPhoto" type="file" accept="image/*" style="display:none" onchange="onBillPhoto(this)">
+<input id="planFile" type="file" accept="image/*,application/pdf,.pdf,.docx" style="display:none" onchange="onPlanFile(this)">
+
+<div id="importModal" class="rc-overlay" onclick="if(event.target===this)closeImport()">
+  <div class="rc-card" style="max-width:420px">
+    <div class="rc-top"><div class="rc-title">Import a meal plan</div><button class="rc-x" onclick="closeImport()">✕</button></div>
+    <div class="rc-body">
+      <div class="ask-msg">Upload a photo, PDF or Word doc of a meal plan — or paste it as text. It gets read into a day-by-day plan, recipes, and a shopping list. This replaces the current plan.</div>
+      <button class="btn primary" style="width:100%;margin:12px 0 4px" onclick="document.getElementById('planFile').click()">📎 Choose photo, PDF or Word file</button>
+      <div class="auth-or">— or —</div>
+      <textarea id="planText" class="ask-in" style="height:120px;font-family:inherit;resize:vertical" placeholder="Paste your meal plan here…"></textarea>
+      <button class="btn primary" style="width:100%;margin-top:8px" onclick="importFromText()">Import from text</button>
+      <div id="importMsg" class="auth-msg"></div>
+    </div>
+  </div>
+</div>
 <div id="photoModal" class="rc-overlay" onclick="closePhoto()"><img class="photo-full" alt="bill"></div>
 
 <div id="askModal" class="rc-overlay" onclick="if(event.target===this)askCancel()">
@@ -751,8 +766,26 @@ function todayIdx(){ const g=new Date().getDay(); return g===0?6:g-1; } // Mon=0
 let planDay = todayIdx();
 function setPlanDay(i){ planDay=i; renderPlan(); }
 
+function mpRecipeExists(name){ const m=data.mealplan&&data.mealplan.recipesMap; return !!(m && name && m[name.toLowerCase()]); }
+function mpDish(name){ return mpRecipeExists(name) ? dishLink(name) : esc(name||''); }
+function renderImportedPlanHTML(mp){
+  const days=mp.days; let idx=Math.min(planDay, days.length-1); if(idx<0) idx=0;
+  const pills=days.map((d,i)=>`<div class="daypill ${i===idx?'active':''}" onclick="setPlanDay(${i})">${esc((d.day||('Day '+(i+1))).slice(0,3))}</div>`).join('');
+  const day=days[idx];
+  const tl=(day.entries||[]).map(e=>`<div class="tl-item"><div class="tl-time" style="width:auto;min-width:64px">${esc(e.slot||'')}</div><div class="tl-body"><div class="tl-slot">${mpDish(e.text)}</div>${e.detail?`<div class="tl-both">${esc(e.detail)}</div>`:''}</div></div>`).join('');
+  const glance=days.map((d,i)=>`<div class="gl2 ${i===idx?'today':''}" onclick="setPlanDay(${i})"><div class="gl2-day">${esc(d.day||('Day '+(i+1)))}</div>${(d.entries||[]).map(e=>`<div class="gl2-line"><b>${esc(e.slot||'')}</b> — ${mpDish(e.text)}</div>`).join('')}</div>`).join('');
+  return `<div class="plan-head">${esc(mp.title||'Meal plan')}${mp.people&&mp.people.length?`<span class="totals">${esc(mp.people.join(' · '))}</span>`:''}</div>
+    <div class="daypills">${pills}</div>
+    <div class="plan-head" style="font-size:15px;margin-top:2px">${esc(day.day||('Day '+(idx+1)))}</div>
+    <div class="timeline">${tl||'<div class="tl-item"><div class="tl-body tl-both">No meals listed.</div></div>'}</div>
+    <div class="glance-wrap"><div class="ed-title">Week at a glance</div><div class="glance">${glance}</div>
+      <div class="legend">Imported plan. Tap any underlined dish for its recipe, or a day to jump to it.</div></div>`;
+}
 function renderPlan(){
   const v=document.getElementById('view-plan');
+  const importBar=`<div class="toolbar" style="margin:10px 0 2px"><button class="btn primary" onclick="openImport()">✨ Import a meal plan</button></div>`;
+  const mp=data.mealplan;
+  if(mp && Array.isArray(mp.days) && mp.days.length){ v.innerHTML=importBar+renderImportedPlanHTML(mp); return; }
   const ti=todayIdx();
   const pills = PLAN_DAYS.map((x,i)=>`<div class="daypill ${i===planDay?'active':''} ${i===ti?'today':''}" onclick="setPlanDay(${i})">${x.d}</div>`).join('');
   const day = PLAN_DAYS[planDay];
@@ -777,7 +810,7 @@ function renderPlan(){
       <div class="gl2-line">🥘 <b>Lunch</b> — Akarsh: ${dishLink(x.aLunch)} · Vartika: ${dishLink("Mexican Burrito Bowl")}</div>
       <div class="gl2-line">🍽 <b>Dinner</b> (both): ${dishLink(x.dinner)}</div>
     </div>`).join('');
-  v.innerHTML = `
+  v.innerHTML = importBar + `
     <div class="daypills">${pills}</div>
     <div class="plan-head">${day.full}${planDay===ti?' · Today':''}
       <span class="totals">Akarsh ~144g P / ~1710 kcal · Vartika ~132g P / ~1370 kcal (+ top-up)</span></div>
@@ -833,7 +866,10 @@ const RECIPES = {
     method:["Beans: spray oil, sauté garlic, add drained beans + cumin + taco seasoning + a splash of water; simmer 8–10 min, lightly mashing some. Cool and portion.","Salsa: dice tomato, red onion and jalapeño; mix with coriander, lime and salt. Store in a jar (2–3 days).","Dressing: stir Greek yogurt with lime + a pinch of salt; store.","Also pack ready: cooked rice, seared paneer/tofu, shredded lettuce, corn."] },
 };
 function openRecipe(name){
-  const r=RECIPES[name]; if(!r) return;
+  let r=RECIPES[name];
+  const mm=data.mealplan&&data.mealplan.recipesMap;
+  if(!r && mm && name && mm[name.toLowerCase()]){ const im=mm[name.toLowerCase()]; r={page:im.page||'', macros:'', note:'', ing:im.ingredients||[], method:im.steps||[]}; }
+  if(!r) return;
   const m=document.getElementById('recipeModal');
   m.querySelector('.rc-title').textContent = name + (r.page? '  '+r.page : '');
   m.querySelector('.rc-sub').textContent = r.macros||'';
@@ -844,6 +880,47 @@ function openRecipe(name){
   m.classList.add('show');
 }
 function closeRecipe(){ document.getElementById('recipeModal').classList.remove('show'); }
+
+/* ===== Import a meal plan ===== */
+function openImport(){ document.getElementById('planText').value=''; document.getElementById('importMsg').textContent=''; document.getElementById('importModal').classList.add('show'); }
+function closeImport(){ document.getElementById('importModal').classList.remove('show'); }
+function importMsg(t,ok){ const e=document.getElementById('importMsg'); e.textContent=t||''; e.className='auth-msg'+(ok?' ok':''); }
+function loadScript(src){ return new Promise((res,rej)=>{ if([...document.scripts].some(s=>s.src===src)){res();return;} const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=()=>rej(new Error('load failed')); document.head.appendChild(s); }); }
+function fileToResizedDataURL(f,max){ return new Promise((res,rej)=>{ const rd=new FileReader(); rd.onload=()=>{ const img=new Image(); img.onload=()=>{ let w=img.width,h=img.height; if(w>h&&w>max){h=Math.round(h*max/w);w=max;}else if(h>max){w=Math.round(w*max/h);h=max;} const c=document.createElement('canvas'); c.width=w;c.height=h; c.getContext('2d').drawImage(img,0,0,w,h); res(c.toDataURL('image/jpeg',0.7)); }; img.onerror=rej; img.src=rd.result; }; rd.onerror=rej; rd.readAsDataURL(f); }); }
+async function docxToText(f){ await loadScript('https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js'); const ab=await f.arrayBuffer(); const r=await window.mammoth.extractRawText({arrayBuffer:ab}); return r.value||''; }
+async function ensurePdf(){ await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'); window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; }
+async function pdfToText(f){ await ensurePdf(); const ab=await f.arrayBuffer(); const pdf=await window.pdfjsLib.getDocument({data:ab}).promise; let out=''; const n=Math.min(pdf.numPages,12); for(let i=1;i<=n;i++){ const pg=await pdf.getPage(i); const tc=await pg.getTextContent(); out+=tc.items.map(x=>x.str).join(' ')+'\n'; } return out; }
+async function pdfFirstPageImage(f){ await ensurePdf(); const ab=await f.arrayBuffer(); const pdf=await window.pdfjsLib.getDocument({data:ab}).promise; const pg=await pdf.getPage(1); const vp=pg.getViewport({scale:1.6}); const c=document.createElement('canvas'); c.width=vp.width;c.height=vp.height; await pg.render({canvasContext:c.getContext('2d'),viewport:vp}).promise; return c.toDataURL('image/jpeg',0.7); }
+function onPlanFile(inp){ const f=inp.files&&inp.files[0]; inp.value=''; if(f) handlePlanFile(f); }
+async function handlePlanFile(f){
+  const name=(f.name||'').toLowerCase();
+  try{
+    importMsg('Reading file…',true);
+    if((f.type||'').startsWith('image/')){ await sendPlan({image: await fileToResizedDataURL(f,1600)}); }
+    else if((f.type==='application/pdf')||name.endsWith('.pdf')){ const t=await pdfToText(f); if(t && t.replace(/\s/g,'').length>60){ await sendPlan({text:t}); } else { await sendPlan({image: await pdfFirstPageImage(f)}); } }
+    else if(name.endsWith('.docx')){ await sendPlan({text: await docxToText(f)}); }
+    else { importMsg('Unsupported file — use a photo, PDF, Word (.docx), or paste text.'); }
+  }catch(e){ importMsg('Couldn’t read that file. Try a photo of it, or paste the text.'); }
+}
+async function importFromText(){ const t=(document.getElementById('planText').value||'').trim(); if(t.length<10){ importMsg('Paste a bit more of the plan first.'); return; } await sendPlan({text:t}); }
+async function sendPlan(payload){
+  if(!cloudOn){ importMsg('Please sign in first.'); return; }
+  importMsg('Reading your plan with AI…',true);
+  try{
+    const {data:res,error}=await sb.functions.invoke('import-mealplan',{body:payload});
+    if(error){ importMsg('Import failed: '+(error.message||'the scanner may not be set up')); return; }
+    if(!res || !(Array.isArray(res.days)&&res.days.length)){ importMsg('Couldn’t find a meal plan in that. Try a clearer file or paste the text.'); return; }
+    applyMealplan(res); closeImport(); setSync('Synced ✓');
+  }catch(e){ importMsg('Import failed. Please try again.'); }
+}
+function applyMealplan(mp){
+  mp.recipesMap={}; (mp.recipes||[]).forEach(r=>{ if(r&&r.name) mp.recipesMap[String(r.name).toLowerCase()]=r; });
+  data.mealplan=mp;
+  const groups={}; (mp.shopping||[]).forEach(x=>{ const sec=((x.section||'Other')+'').trim()||'Other'; (groups[sec]=groups[sec]||[]).push(it(x.name||'Item', x.note||'')); });
+  const emo=s=>({'Produce':'🥬','Dairy & eggs':'🥚','Dairy':'🥚','Meat & protein':'🍗','Meat':'🍗','Pantry':'🫙','Frozen':'❄️','Spices':'🌶️','Bakery':'🍞','Drinks':'🥤','Other':'🛒'}[s]||'🛒');
+  if(Object.keys(groups).length){ data.stores=Object.keys(groups).map(sec=>({id:'m'+uid(), name:emo(sec)+' '+sec, collapsed:false, items:groups[sec]})); }
+  planDay=0; data.updatedAt=Date.now(); saveLocal(); render(); schedulePush(); showTab('plan');
+}
 
 /* ===== Prep day ===== */
 function renderPrep(){

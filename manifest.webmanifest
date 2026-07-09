@@ -1,13 +1,13 @@
 {
-  "name": "Grocery & Meal Planner",
-  "short_name": "Groceries",
-  "description": "Shared grocery checklist, weekly meal plan, recipes and shopping cost tracker.",
+  "name": "Larder — meal plan & grocery",
+  "short_name": "Larder",
+  "description": "Your personalised weekly meal plan, recipes, prep guide and a smart grocery list sorted by the stores you shop at.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#0f766e",
-  "theme_color": "#0f766e",
+  "background_color": "#2e5d4b",
+  "theme_color": "#2e5d4b",
   "icons": [
     { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
     { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }

@@ -3,28 +3,38 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#0f766e">
+<meta name="theme-color" content="#2e5d4b">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Groceries">
+<meta name="apple-mobile-web-app-title" content="Larder">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="favicon-32.png">
-<title>Grocery &amp; Meal Planner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<title>Larder — weekly meal &amp; grocery planner</title>
 <style>
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   :root{
-    --bg:#f4f6f8; --card:#ffffff; --ink:#1a2230; --muted:#6b7686;
-    --line:#e6e9ee; --teal:#0f766e; --teal-soft:#e6f4f2; --done:#94a3b8;
+    --bg:#f6f3ee; --card:#ffffff; --ink:#22271f; --muted:#7c837a;
+    --line:#e7e2d9; --teal:#2e5d4b; --teal-soft:#e7f0eb; --done:#a6ada3;
+    --gold:#b4894c; --brand:#2e5d4b; --shadow:0 1px 2px rgba(34,39,31,.04),0 6px 20px rgba(34,39,31,.06);
+    --serif:"Fraunces",Georgia,"Times New Roman",serif;
   }
-  body{ margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-    background:var(--bg); color:var(--ink); line-height:1.4; padding-bottom:48px; }
-  .topbar{ position:sticky; top:0; z-index:20; background:var(--bg); box-shadow:0 3px 10px rgba(0,0,0,.08); }
-  header{ position:relative; z-index:10; background:var(--teal); color:#fff;
-    padding:16px 18px 14px; }
+  body{ margin:0; font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg); color:var(--ink); line-height:1.45; padding-bottom:48px; -webkit-font-smoothing:antialiased; }
+  .topbar{ position:sticky; top:0; z-index:20; background:var(--bg); box-shadow:0 4px 18px rgba(34,39,31,.07); }
+  header{ position:relative; z-index:10; background:linear-gradient(160deg,#356a54 0%,#2e5d4b 55%,#264d3f 100%); color:#fff;
+    padding:16px 18px 15px; }
   .titlerow{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
-  .acct-btn{ border:none; background:rgba(255,255,255,.2); color:#fff; width:30px; height:30px; border-radius:50%; font-size:15px; cursor:pointer; line-height:1; }
+  .brandmark{ display:flex; align-items:center; gap:9px; }
+  .brandmark .mark{ width:30px; height:30px; border-radius:9px; background:rgba(255,255,255,.14); display:flex; align-items:center; justify-content:center; font-size:16px; }
+  .acct-btn{ border:none; background:rgba(255,255,255,.16); color:#fff; width:32px; height:32px; border-radius:50%; font-size:15px; cursor:pointer; line-height:1; }
+  .trialbar{ display:none; align-items:center; justify-content:space-between; gap:10px; background:#fbf6ec; border-bottom:1px solid #efe4cf; color:#6b4e21; font-size:12px; font-weight:600; padding:7px 16px; }
+  .trialbar.show{ display:flex; }
+  .trialbar button{ border:none; background:var(--gold); color:#fff; font-weight:700; font-size:11.5px; padding:6px 12px; border-radius:8px; cursor:pointer; flex:none; }
   .auth-gate{ position:fixed; inset:0; z-index:100; background:var(--teal); display:none; align-items:center; justify-content:center; padding:20px; }
   .auth-gate.show{ display:flex; }
   .auth-card{ background:var(--card); border-radius:16px; padding:26px 22px; width:100%; max-width:360px; text-align:center; box-shadow:0 10px 40px rgba(0,0,0,.25); }
@@ -43,7 +53,7 @@
   .acct-email{ font-size:13px; color:var(--muted); margin-bottom:4px; }
   .share-row{ display:flex; gap:8px; }
   .share-row .ask-in{ flex:1; font-size:11px; }
-  h1{ margin:0; font-size:20px; font-weight:700; letter-spacing:-.2px; }
+  h1{ margin:0; font-family:var(--serif); font-size:23px; font-weight:600; letter-spacing:-.3px; line-height:1; }
   .sync{ font-size:11px; font-weight:600; padding:4px 9px; border-radius:20px; background:rgba(255,255,255,.18); white-space:nowrap; }
   .sync.off{ background:#b91c1c; }
   .sub{ font-size:12.5px; opacity:.85; margin-top:2px; }
@@ -52,14 +62,14 @@
   .progfill{ height:100%; background:#fff; width:0%; transition:width .3s ease; border-radius:6px; }
   .progtext{ font-size:12px; margin-top:5px; opacity:.9; }
 
-  .tabs{ display:flex; gap:8px; padding:12px 14px 0; max-width:720px; margin:0 auto; }
-  .tab{ flex:1; text-align:center; padding:10px; font-size:13.5px; font-weight:600;
-    background:var(--card); border:1px solid var(--line); border-radius:10px 10px 0 0;
-    color:var(--muted); cursor:pointer; user-select:none; }
-  .tab.active{ color:var(--teal); border-bottom:2px solid var(--teal); }
+  .tabs{ display:flex; gap:4px; padding:10px 14px 8px; max-width:720px; margin:0 auto; background:var(--bg); }
+  .tab{ flex:1; text-align:center; padding:9px 8px; font-size:13px; font-weight:600;
+    background:transparent; border:none; border-radius:9px;
+    color:var(--muted); cursor:pointer; user-select:none; transition:.15s; }
+  .tab.active{ color:var(--brand); background:var(--card); box-shadow:var(--shadow); font-weight:700; }
 
   main{ max-width:720px; margin:0 auto; padding:6px 14px; }
-  .store{ background:var(--card); border:1px solid var(--line); border-radius:12px; margin:12px 0; overflow:hidden; }
+  .store{ background:var(--card); border:1px solid var(--line); border-radius:14px; margin:12px 0; overflow:hidden; box-shadow:var(--shadow); }
   .store-head{ display:flex; align-items:center; gap:10px; padding:13px 15px; cursor:pointer; }
   .chev{ transition:transform .2s; flex:none; color:var(--muted); }
   .store.collapsed .chev{ transform:rotate(-90deg); }
@@ -104,9 +114,11 @@
   body.editing .addstore{ display:block; }
 
   .toolbar{ display:flex; gap:8px; margin:14px 0 4px; }
-  .btn{ flex:1; padding:11px; font-size:13px; font-weight:600; border-radius:10px;
-    border:1px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer; }
-  .btn.primary{ background:var(--teal); color:#fff; border-color:var(--teal); }
+  .btn{ flex:1; padding:12px; font-size:13px; font-weight:600; border-radius:12px;
+    border:1px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer; transition:.12s; }
+  .btn:active{ transform:scale(.985); }
+  .btn.primary{ background:var(--brand); color:#fff; border-color:var(--brand); box-shadow:0 4px 14px rgba(46,93,75,.22); }
+  .btn.gold{ background:var(--gold); color:#fff; border-color:var(--gold); box-shadow:0 4px 14px rgba(180,137,76,.25); }
   .btn.warn{ color:#b91c1c; border-color:#f0c9c9; background:#fef2f2; }
   .hidden{ display:none; }
   .footnote{ text-align:center; font-size:11px; color:var(--muted); margin-top:18px; padding:0 10px; }
@@ -207,24 +219,116 @@
   .bill-thumb{ width:40px; height:40px; object-fit:cover; border-radius:7px; border:1px solid var(--line); cursor:pointer; }
   .photo-full{ max-width:94%; max-height:90vh; border-radius:12px; box-shadow:0 8px 40px rgba(0,0,0,.4); }
   #photoModal.show{ display:flex; }
+
+  /* ===== Premium auth polish ===== */
+  .auth-gate{ background:linear-gradient(165deg,#356a54 0%,#2e5d4b 55%,#22493a 100%); }
+  .auth-card{ border-radius:22px; padding:30px 24px; box-shadow:0 24px 70px rgba(0,0,0,.32); }
+  .auth-logo{ font-size:0; margin-bottom:6px; }
+  .auth-logo .mk{ display:inline-flex; align-items:center; justify-content:center; width:54px; height:54px; border-radius:16px; background:var(--teal-soft); font-size:26px; }
+  .auth-card h2{ font-family:var(--serif); font-weight:600; font-size:24px; letter-spacing:-.4px; }
+  .btn.primary, .auth-in, .btn{ font-family:inherit; }
+
+  /* ===== Onboarding & paywall overlays ===== */
+  .ob{ position:fixed; inset:0; z-index:120; background:var(--bg); display:none; flex-direction:column; }
+  .ob.show{ display:flex; }
+  .ob-top{ padding:16px 20px 6px; }
+  .ob-prog{ height:5px; background:var(--line); border-radius:6px; overflow:hidden; }
+  .ob-prog i{ display:block; height:100%; width:0; background:var(--brand); border-radius:6px; transition:width .35s ease; }
+  .ob-step-c{ font-size:11px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; color:var(--muted); margin-top:10px; }
+  .ob-body{ flex:1; overflow-y:auto; padding:6px 20px 20px; max-width:560px; margin:0 auto; width:100%; }
+  .ob-h{ font-family:var(--serif); font-weight:600; font-size:26px; letter-spacing:-.4px; margin:10px 0 6px; line-height:1.15; }
+  .ob-sub{ font-size:14px; color:var(--muted); margin:0 0 18px; line-height:1.5; }
+  .ob-label{ font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin:18px 0 9px; }
+  .chips{ display:flex; flex-wrap:wrap; gap:8px; }
+  .chip{ padding:10px 15px; border-radius:30px; border:1.5px solid var(--line); background:var(--card); font-size:13.5px; font-weight:600; color:var(--ink); cursor:pointer; user-select:none; transition:.12s; }
+  .chip:active{ transform:scale(.96); }
+  .chip.on{ background:var(--brand); color:#fff; border-color:var(--brand); box-shadow:0 4px 12px rgba(46,93,75,.2); }
+  .chip.add{ border-style:dashed; color:var(--brand); }
+  .ob-in{ width:100%; padding:13px 14px; font-size:16px; border:1.5px solid var(--line); border-radius:12px; background:var(--card); color:var(--ink); font-family:inherit; }
+  .ob-in:focus{ outline:none; border-color:var(--brand); }
+  .stepper{ display:flex; align-items:center; gap:16px; }
+  .stepper button{ width:44px; height:44px; border-radius:12px; border:1.5px solid var(--line); background:var(--card); font-size:22px; font-weight:700; color:var(--brand); cursor:pointer; }
+  .stepper .val{ font-size:22px; font-weight:800; min-width:28px; text-align:center; }
+  .stepper .lbl{ flex:1; font-size:14px; font-weight:600; }
+  .ob-foot{ padding:12px 20px calc(16px + env(safe-area-inset-bottom)); border-top:1px solid var(--line); background:var(--card); display:flex; gap:10px; max-width:560px; margin:0 auto; width:100%; }
+  .ob-foot .btn{ padding:15px; font-size:15px; border-radius:14px; }
+  .ob-gen{ text-align:center; padding:40px 10px; }
+  .ob-gen .spin{ width:46px; height:46px; border:4px solid var(--line); border-top-color:var(--brand); border-radius:50%; margin:0 auto 18px; animation:spin 1s linear infinite; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+
+  .paywall{ position:fixed; inset:0; z-index:130; background:linear-gradient(165deg,#356a54,#22493a); display:none; align-items:center; justify-content:center; padding:20px; }
+  .paywall.show{ display:flex; }
+  .pw-card{ background:var(--card); border-radius:24px; width:100%; max-width:400px; padding:28px 24px; text-align:center; box-shadow:0 24px 70px rgba(0,0,0,.34); max-height:92vh; overflow-y:auto; }
+  .pw-badge{ display:inline-block; font-size:11px; font-weight:800; letter-spacing:.6px; text-transform:uppercase; color:var(--gold); background:#f7efe1; padding:5px 12px; border-radius:20px; }
+  .pw-card h2{ font-family:var(--serif); font-weight:600; font-size:25px; letter-spacing:-.4px; margin:14px 0 4px; }
+  .pw-price{ font-family:var(--serif); font-size:34px; font-weight:600; margin:8px 0 2px; }
+  .pw-price span{ font-family:"Inter"; font-size:14px; font-weight:600; color:var(--muted); }
+  .pw-sub{ font-size:13.5px; color:var(--muted); margin:2px 0 16px; }
+  .pw-feats{ text-align:left; margin:8px 0 20px; }
+  .pw-feat{ display:flex; gap:11px; align-items:flex-start; font-size:13.5px; padding:7px 0; }
+  .pw-feat .ck{ flex:none; width:20px; height:20px; border-radius:50%; background:var(--teal-soft); color:var(--brand); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; margin-top:1px; }
+  .pw-note{ font-size:11.5px; color:var(--muted); margin-top:14px; line-height:1.5; }
+  .pw-x{ position:absolute; }
+  .pw-manage{ font-size:12.5px; color:var(--muted); margin-top:12px; cursor:pointer; text-decoration:underline; }
+  .settings-link{ font-size:12.5px; color:var(--brand); font-weight:700; cursor:pointer; }
+
+  /* ===== Welcome / landing ===== */
+  .welcome{ position:fixed; inset:0; z-index:110; background:var(--bg); display:none; flex-direction:column; overflow:hidden; }
+  .welcome.show{ display:flex; }
+  .wc-top{ flex:1; display:flex; flex-direction:column; justify-content:center; padding:30px 26px 10px; max-width:520px; margin:0 auto; width:100%; }
+  .wc-logo{ display:flex; align-items:center; gap:12px; margin-bottom:22px; }
+  .wc-logo .mk{ width:52px; height:52px; border-radius:15px; background:linear-gradient(160deg,#356a54,#2e5d4b); color:#fff; display:flex; align-items:center; justify-content:center; font-size:26px; box-shadow:0 8px 22px rgba(46,93,75,.28); }
+  .wc-logo .nm{ font-family:var(--serif); font-weight:600; font-size:30px; letter-spacing:-.5px; }
+  .wc-feat{ display:flex; align-items:center; gap:13px; font-family:var(--serif); font-size:27px; font-weight:600; letter-spacing:-.3px; margin:7px 0; }
+  .wc-feat .ck{ width:30px; height:30px; border-radius:50%; border:2.5px solid var(--brand); color:var(--brand); display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:800; flex:none; }
+  .wc-all{ font-size:15px; color:var(--muted); margin:10px 2px 24px; }
+  .wc-cta{ display:block; width:100%; padding:17px; font-size:16px; font-weight:700; color:#fff; background:var(--brand); border:none; border-radius:16px; cursor:pointer; box-shadow:0 8px 22px rgba(46,93,75,.28); }
+  .wc-login{ text-align:center; font-size:14.5px; color:var(--muted); margin-top:18px; }
+  .wc-login b{ color:var(--brand); cursor:pointer; }
+  .wc-strip{ display:grid; grid-template-columns:repeat(4,1fr); gap:6px; padding:6px; }
+  .wc-tile{ aspect-ratio:1; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:34px; }
+  .wc-tile:nth-child(1){ background:#e7f0eb;} .wc-tile:nth-child(2){ background:#f5ecdc;} .wc-tile:nth-child(3){ background:#eae6df;} .wc-tile:nth-child(4){ background:#e7f0eb;}
+  .wc-tile:nth-child(5){ background:#f5ecdc;} .wc-tile:nth-child(6){ background:#e7f0eb;} .wc-tile:nth-child(7){ background:#eae6df;} .wc-tile:nth-child(8){ background:#f5ecdc;}
+
+  /* ===== Two-tier subscription ===== */
+  .pw-plans{ display:flex; gap:11px; margin:6px 0 16px; }
+  .pw-plan{ flex:1; border:2px solid var(--line); border-radius:18px; padding:16px 10px 14px; cursor:pointer; text-align:center; position:relative; background:var(--card); transition:.15s; }
+  .pw-plan.on{ border-color:var(--brand); background:var(--teal-soft); box-shadow:0 6px 18px rgba(46,93,75,.16); }
+  .pw-plan .save{ position:absolute; top:-11px; left:50%; transform:translateX(-50%); background:var(--gold); color:#fff; font-size:10px; font-weight:800; letter-spacing:.4px; padding:4px 10px; border-radius:20px; white-space:nowrap; }
+  .pw-plan .pl{ font-size:14px; font-weight:700; color:var(--muted); margin-bottom:3px; }
+  .pw-plan.on .pl{ color:var(--brand); }
+  .pw-plan .amt{ font-family:var(--serif); font-size:26px; font-weight:600; letter-spacing:-.5px; }
+  .pw-plan .per{ font-size:12px; color:var(--muted); margin-top:2px; }
+  .pw-links{ display:flex; flex-wrap:wrap; justify-content:center; gap:6px 14px; margin:16px 0 6px; }
+  .pw-links a,.pw-links span{ font-size:12.5px; color:var(--muted); text-decoration:underline; cursor:pointer; }
+  .pw-social{ margin-top:20px; padding-top:16px; border-top:1px solid var(--line); }
+  .pw-social h3{ font-family:var(--serif); font-weight:600; font-size:18px; margin:0 0 10px; }
+  .pw-review{ background:var(--bg); border-radius:14px; padding:14px 15px; text-align:left; }
+  .pw-stars{ color:var(--gold); font-size:15px; letter-spacing:2px; margin-bottom:7px; }
+  .pw-review p{ margin:0; font-size:13px; line-height:1.5; }
+  .pw-review .who{ display:block; text-transform:none; letter-spacing:0; font-weight:700; color:var(--muted); margin-top:8px; font-size:12px; }
 </style>
 </head>
 <body>
 <div class="topbar">
 <header>
   <div class="titlerow">
-    <h1>🛒 Grocery Checklist</h1>
+    <div class="brandmark"><span class="mark">🌿</span><h1>Larder</h1></div>
     <div style="display:flex;align-items:center;gap:8px">
       <span class="sync" id="sync">…</span>
       <button id="acctBtn" class="acct-btn" onclick="openAcct()" style="display:none" title="Account">👤</button>
     </div>
   </div>
-  <div class="sub" id="sub">Synced across your devices</div>
+  <div class="sub" id="sub">Your week, planned &amp; provisioned</div>
   <div class="progwrap">
     <div class="progbar"><div class="progfill" id="progfill"></div></div>
     <div class="progtext" id="progtext">0 of 0 done</div>
   </div>
 </header>
+<div class="trialbar" id="trialbar">
+  <span id="trialText">Free trial</span>
+  <button onclick="openPaywall()">Upgrade</button>
+</div>
 
 <div class="tabs">
   <div class="tab active" id="tab-list" onclick="showTab('list')">Shop</div>
@@ -294,20 +398,38 @@
   </div>
 </div>
 
+<div id="welcome" class="welcome">
+  <div class="wc-top">
+    <div class="wc-logo"><span class="mk">🌿</span><span class="nm">Larder</span></div>
+    <div class="wc-feat"><span class="ck">✓</span> Plan</div>
+    <div class="wc-feat"><span class="ck">✓</span> Shop</div>
+    <div class="wc-feat"><span class="ck">✓</span> Cook</div>
+    <div class="wc-feat"><span class="ck">✓</span> Track</div>
+    <div class="wc-all">Your whole week of food — personalised, in one place.</div>
+    <button class="wc-cta" onclick="goAuth('signup')">Get started</button>
+    <div class="wc-login">Already have an account? <b onclick="goAuth('login')">Login</b></div>
+  </div>
+  <div class="wc-strip">
+    <div class="wc-tile">🥗</div><div class="wc-tile">🍜</div><div class="wc-tile">🍲</div><div class="wc-tile">🥘</div>
+    <div class="wc-tile">🍳</div><div class="wc-tile">🫐</div><div class="wc-tile">🥑</div><div class="wc-tile">🍛</div>
+  </div>
+</div>
+
 <div id="authGate" class="auth-gate">
   <div class="auth-card">
-    <div class="auth-logo">🛒</div>
-    <h2>Grocery &amp; Meal Planner</h2>
-    <p class="auth-sub">Sign in to your private list</p>
-    <button class="btn google-btn" onclick="doGoogle()"><span class="g-icon">G</span> Sign in with Google</button>
-    <div class="auth-or" id="emailToggle">— or use email —</div>
+    <div class="auth-logo"><span class="mk">🌿</span></div>
+    <h2 id="authTitle">Create your account</h2>
+    <p class="auth-sub" id="authSub">Save your plan and sync it across every device.</p>
+    <input id="authFirst" type="text" autocomplete="given-name" placeholder="First name" class="auth-in">
     <input id="authEmail" type="email" autocomplete="email" placeholder="Email" class="auth-in">
-    <input id="authPass" type="password" autocomplete="current-password" placeholder="Password (6+ characters)" class="auth-in" onkeydown="if(event.key==='Enter')doSignIn()">
-    <div class="auth-row"><button class="btn primary" style="flex:1" onclick="doSignIn()">Sign in</button><button class="btn" style="flex:1" onclick="doSignUp()">Create account</button></div>
-    <div class="auth-or">— or —</div>
-    <button class="btn" style="width:100%" onclick="doMagic()">✉️ Email me a login link</button>
-    <div class="auth-hint">No password needed — we’ll email you a link that signs you in.</div>
+    <input id="authPass" type="password" autocomplete="current-password" placeholder="Password" class="auth-in" onkeydown="if(event.key==='Enter')doAuthPrimary()">
+    <button class="btn primary" id="authCta" style="width:100%;padding:14px;font-size:15px" onclick="doAuthPrimary()">Create account</button>
+    <div class="auth-or">Or</div>
+    <button class="btn google-btn" onclick="doGoogle()"><span class="g-icon">G</span> Continue with Google</button>
+    <div class="auth-hint"><span class="settings-link" id="authMagic" onclick="doMagic()">Email me a login link instead</span></div>
     <div id="authMsg" class="auth-msg"></div>
+    <div class="auth-hint">By continuing you agree to Larder’s <a href="privacy.html" target="_blank" style="color:var(--muted)">Terms &amp; Privacy</a>.</div>
+    <div class="wc-login" style="margin-top:14px"><span id="authSwap"></span></div>
   </div>
 </div>
 
@@ -316,6 +438,9 @@
     <div class="rc-top"><div class="rc-title">Account</div><button class="rc-x" onclick="closeAcct()">✕</button></div>
     <div class="rc-body">
       <div class="acct-email">Signed in as <b id="acctEmail"></b></div>
+      <div id="acctSubLine" class="ask-msg" style="margin:6px 0 2px"></div>
+      <button class="btn primary" style="width:100%;margin-top:10px" onclick="editPrefs()">🍽 Edit my preferences &amp; regenerate plan</button>
+      <button class="btn" style="width:100%;margin-top:8px" onclick="openPaywall()">💳 Manage subscription</button>
       <div class="rc-h">Share this list</div>
       <div class="ask-msg">Give this code to your partner so you both use the same list.</div>
       <div class="share-row"><input id="shareCode" class="ask-in" readonly><button class="btn" id="copyShareBtn" onclick="copyShare()">Copy</button></div>
@@ -360,6 +485,40 @@
       <div style="display:flex;gap:8px;margin-top:14px">
         <button class="btn" style="flex:1" onclick="askCancel()">Cancel</button>
         <button class="btn primary" style="flex:1" id="askOk">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="obGate" class="ob">
+  <div class="ob-top">
+    <div class="ob-prog"><i id="obProg"></i></div>
+    <div class="ob-step-c" id="obStepC"></div>
+  </div>
+  <div class="ob-body" id="obBody"></div>
+  <div class="ob-foot" id="obFoot"></div>
+</div>
+
+<div id="paywall" class="paywall">
+  <div class="pw-card">
+    <span class="pw-badge">Larder Premium</span>
+    <h2 id="pwTitle">Start your free trial</h2>
+    <div class="pw-sub" id="pwSub">Everything you need to plan, shop &amp; cook the week.</div>
+    <div class="pw-plans" id="pwPlans"></div>
+    <button class="btn gold" style="width:100%;padding:16px;font-size:15px" id="pwCta" onclick="startCheckout()">Start free trial</button>
+    <div class="pw-note" id="pwNote" style="margin-top:10px"></div>
+    <div class="pw-links">
+      <span onclick="refreshSub()">Restore</span>
+      <a href="mailto:claudevj657@gmail.com">Contact us</a>
+      <a href="privacy.html" target="_blank">Terms</a>
+      <a href="privacy.html" target="_blank">Privacy</a>
+    </div>
+    <div class="pw-social">
+      <h3>Join thousands of happy cooks</h3>
+      <div class="pw-review">
+        <div class="pw-stars">★★★★★</div>
+        <p>This has changed how we eat. The plan fits our diet perfectly and the grocery list is sorted by exactly the shops we go to. My partner loves sharing it.</p>
+        <span class="who">— Priya &amp; Sam</span>
       </div>
     </div>
   </div>
@@ -450,6 +609,7 @@ async function pull(){
 /* ---- auth + list bootstrap ---- */
 async function afterLogin(){
   document.getElementById('authGate').classList.remove('show');
+  document.getElementById('welcome').classList.remove('show');
   document.getElementById('acctBtn').style.display='';
   try{
     // accept any pending email invites addressed to this account
@@ -478,12 +638,30 @@ async function afterLogin(){
     activeListId=id; localStorage.setItem('activeList', id); cloudOn=true;
     await pull(); render();
     if(!window._syncInt){ window._syncInt=setInterval(pull,5000); document.addEventListener('visibilitychange',()=>{ if(!document.hidden) pull(); }); }
+    await loadProfileAndGate();
   }catch(e){ setSync('Offline','off'); }
 }
 function showLogin(){ cloudOn=false; activeListId=null;
-  const em=document.getElementById('authEmail'), pw=document.getElementById('authPass');
-  if(em) em.value=''; if(pw) pw.value=''; authMsg('');
-  document.getElementById('authGate').classList.add('show'); document.getElementById('acctBtn').style.display='none'; }
+  const em=document.getElementById('authEmail'), pw=document.getElementById('authPass'), fn=document.getElementById('authFirst');
+  if(em) em.value=''; if(pw) pw.value=''; if(fn) fn.value=''; authMsg('');
+  document.getElementById('authGate').classList.remove('show');
+  document.getElementById('obGate').classList.remove('show');
+  document.getElementById('paywall').classList.remove('show');
+  document.getElementById('welcome').classList.add('show');
+  document.getElementById('acctBtn').style.display='none'; }
+let _authMode='signup';
+function setAuthMode(m){
+  _authMode=m;
+  document.getElementById('authFirst').style.display = m==='signup'?'block':'none';
+  document.getElementById('authTitle').textContent = m==='signup'?'Create your account':'Welcome back';
+  document.getElementById('authSub').textContent = m==='signup'?'Save your plan and sync it across every device.':'Log in to pick up right where you left off.';
+  document.getElementById('authCta').textContent = m==='signup'?'Create account':'Log in';
+  document.getElementById('authPass').setAttribute('autocomplete', m==='signup'?'new-password':'current-password');
+  document.getElementById('authSwap').innerHTML = m==='signup'?'Already have an account? <b onclick="setAuthMode(\'login\')">Login</b>':'New here? <b onclick="setAuthMode(\'signup\')">Create account</b>';
+  authMsg('');
+}
+function goAuth(m){ document.getElementById('welcome').classList.remove('show'); document.getElementById('authGate').classList.add('show'); setAuthMode(m||'signup'); }
+function doAuthPrimary(){ if(_authMode==='signup') doSignUp(); else doSignIn(); }
 
 /* auth actions */
 function authEmail(){ return (document.getElementById('authEmail').value||'').trim(); }
@@ -512,6 +690,8 @@ async function doSignIn(){
 }
 async function doSignUp(){
   const em=authEmail(), pw=document.getElementById('authPass').value;
+  const fn=(document.getElementById('authFirst').value||'').trim();
+  if(fn) localStorage.setItem('larder_first', fn);
   if(!validEmail(em)){ authMsg('Enter a valid email address.'); return; }
   if(pw.length<6){ authMsg('Choose a password of at least 6 characters.'); return; }
   authMsg('Creating account…',true);
@@ -812,7 +992,7 @@ function renderImportedPlanHTML(mp){
 }
 function renderPlan(){
   const v=document.getElementById('view-plan');
-  const importBar=`<div class="toolbar" style="margin:10px 0 2px"><button class="btn primary" onclick="openImport()">✨ Import a meal plan</button></div>`;
+  const importBar=`<div class="toolbar" style="margin:10px 0 2px"><button class="btn primary" onclick="regeneratePlan()">✨ Generate my plan</button><button class="btn" onclick="openImport()">📎 Import</button></div>`;
   const mp=data.mealplan;
   if(mp && Array.isArray(mp.days) && mp.days.length){ v.innerHTML=importBar+renderImportedPlanHTML(mp); return; }
   const ti=todayIdx();
@@ -1002,6 +1182,337 @@ function renderPrep(){
     </div>`;
 }
 function resetAll(){ askConfirm('Reset all ticks?', 'Clears all ticks (keeps your items).', ()=>{ data.stores.forEach(s=>s.items.forEach(x=>{ x.done=false; x.ts=0; })); saveLocal(); render(); schedulePush(); }); }
+
+/* ==================================================================
+   PROFILE · ONBOARDING · AI PLAN · TRIAL + STRIPE PAYWALL
+   ================================================================== */
+const TRIAL_DAYS = 7;
+/* Two-tier subscription (amounts shown here must match the Stripe Prices VJ creates) */
+const PLANS = {
+  annual:  { key:'annual',  label:'Annual',  amount:'$69.99', per:'$5.83 / month', save:'SAVE 58%', trialLine:'7 days free, then $69.99 per year' },
+  monthly: { key:'monthly', label:'Monthly', amount:'$13.99', per:'per month',      save:'',         trialLine:'7 days free, then $13.99 per month' }
+};
+let selectedPlan = 'annual';
+let profile = null;            // { user_id, data:{...answers}, trial_start, subscription_status, stripe_customer_id }
+let obEditMode = false;
+
+const OB_SEX     = ['Female','Male','Other'];
+const OB_ACTIVITY= ['Sedentary','Lightly active','Moderately active','Very active','Athlete'];
+const OB_GOALS   = ['Lose weight','Maintain weight','Build muscle','High protein','More energy','Eat healthier','Save time','Save money'];
+const OB_DIET    = ['Omnivore','Vegetarian','Vegan','Eggetarian','Pescatarian','Flexitarian','Keto','Halal','Jain'];
+const OB_CUISINE = ['Indian','Italian','Mexican','Thai','Chinese','Japanese','Mediterranean','Middle Eastern','American','Vietnamese','Korean','Continental'];
+const OB_ALLERGENS=['Peanuts','Tree nuts','Dairy','Eggs','Gluten','Shellfish','Fish','Soy','Sesame'];
+const OB_SKILL   = ['Beginner','Comfortable','Confident','Advanced'];
+const OB_GADGETS = ['Oven','Stovetop','Microwave','Air fryer','Blender','Food processor','Pressure cooker / Instant Pot','Slow cooker','Rice cooker','Grill / BBQ','Toaster'];
+const OB_PANTRY  = ['Rice','Pasta','Flour','Cooking oil','Salt & pepper','Common spices','Onions & garlic','Canned tomatoes','Canned beans/lentils','Soy sauce','Stock/broth','Sugar/sweetener'];
+const OB_BUDGET  = ['Under $100','$100–200','$200–300','$300+'];
+const OB_STORES_DEFAULT = ['Costco','Woolworths','Coles','Aldi','Indian grocery','Asian grocery','Butcher','Farmers market'];
+
+function newObState(){ return { onboarded:false, household:{adults:2,kids:0},
+  person:{ sex:'', age:'', heightCm:'', weightKg:'', activity:'' },
+  goals:[], calorieGoal:'', diet:'Omnivore', cuisines:[], allergies:[], allergiesOther:'', dislikes:'',
+  skill:'', gadgets:['Oven','Stovetop','Microwave'], pantry:[], budget:'', stores:[], referral:'' }; }
+let ob = newObState();
+
+/* Mifflin-St Jeor + activity + goal → suggested daily calories */
+function activityFactor(a){ return {'Sedentary':1.2,'Lightly active':1.375,'Moderately active':1.55,'Very active':1.725,'Athlete':1.9}[a]||1.375; }
+function suggestedCalories(){
+  const p=ob.person||{}; const age=+p.age, h=+p.heightCm, w=+p.weightKg;
+  if(!age||!h||!w) return null;
+  let bmr = 10*w + 6.25*h - 5*age + (p.sex==='Male'?5:(p.sex==='Female'?-161:-78));
+  let tdee = bmr*activityFactor(p.activity);
+  if(ob.goals.includes('Lose weight')) tdee*=0.8;
+  else if(ob.goals.includes('Build muscle')) tdee*=1.1;
+  return Math.max(1200, Math.round(tdee/50)*50);
+}
+
+/* ---- load profile + decide what to show ---- */
+async function loadProfileAndGate(){
+  const uid = session && session.user && session.user.id;
+  if(!uid) return;
+  try{
+    let {data:row} = await sb.from('profiles').select('*').eq('user_id',uid).maybeSingle();
+    if(!row){
+      const seed={ user_id:uid, data:newObState(), trial_start:new Date().toISOString(), subscription_status:'trialing' };
+      const {data:ins} = await sb.from('profiles').insert(seed).select('*').maybeSingle();
+      row = ins || seed;
+    }
+    profile = row;
+    if(!profile.data) profile.data = newObState();
+    const fn=localStorage.getItem('larder_first'); if(fn && !profile.data.firstName){ profile.data.firstName=fn; saveProfileData(); }
+  }catch(e){ profile = { user_id:uid, data:newObState(), trial_start:new Date().toISOString(), subscription_status:'trialing' }; }
+
+  // returning from a Stripe checkout?
+  const qs = new URLSearchParams(location.search);
+  if(qs.get('checkout')==='success'){ history.replaceState(null,'',location.pathname); await pollSubscription(); }
+
+  if(!profile.data.onboarded){ startOnboarding(false); }
+  else { applyGate(); }
+}
+
+async function saveProfileData(){
+  if(!profile) return;
+  profile.data.updatedAt = Date.now();
+  try{ await sb.from('profiles').update({ data:profile.data, updated_at:new Date().toISOString() }).eq('user_id', profile.user_id); }catch(e){}
+}
+
+/* ---- trial / subscription gating ---- */
+function trialEndMs(){ const t = profile && profile.trial_start ? Date.parse(profile.trial_start) : Date.now(); return t + TRIAL_DAYS*86400000; }
+function isSubscribed(){ return profile && profile.subscription_status==='active'; }
+function hasAccess(){ return isSubscribed() || Date.now() < trialEndMs(); }
+function applyGate(){
+  const bar=document.getElementById('trialbar');
+  if(hasAccess()){
+    document.getElementById('paywall').classList.remove('show');
+    if(isSubscribed()){ bar.classList.remove('show'); }
+    else {
+      const days=Math.max(0, Math.ceil((trialEndMs()-Date.now())/86400000));
+      document.getElementById('trialText').textContent = days<=1 ? 'Free trial ends today' : ('Free trial · '+days+' days left');
+      bar.classList.add('show');
+    }
+  } else {
+    bar.classList.remove('show');
+    openPaywall(true);
+  }
+  updateAcctSub();
+}
+function updateAcctSub(){
+  const el=document.getElementById('acctSubLine'); if(!el||!profile) return;
+  if(isSubscribed()){ el.className='ask-msg ok'; el.textContent='✓ Larder Premium — active subscription'; }
+  else { const days=Math.max(0, Math.ceil((trialEndMs()-Date.now())/86400000)); el.className='ask-msg'; el.textContent=days>0?('Free trial — '+days+' day'+(days===1?'':'s')+' left'):'Free trial ended'; }
+}
+
+/* ---- paywall ---- */
+function renderPwPlans(){
+  const el=document.getElementById('pwPlans'); if(!el) return;
+  el.innerHTML=Object.values(PLANS).map(p=>`<div class="pw-plan ${selectedPlan===p.key?'on':''}" onclick="selectPlan('${p.key}')">${p.save?`<span class="save">${p.save}</span>`:''}<div class="pl">${p.label}</div><div class="amt">${p.amount}</div><div class="per">${esc(p.per)}</div></div>`).join('');
+  const note=document.getElementById('pwNote'); if(note) note.textContent=PLANS[selectedPlan].trialLine;
+}
+function selectPlan(k){ selectedPlan=k; renderPwPlans(); }
+function openPaywall(locked){
+  const pw=document.getElementById('paywall');
+  const subbed=isSubscribed();
+  document.getElementById('pwTitle').textContent = subbed ? 'Larder Premium' : (locked ? 'Your free trial has ended' : 'Start your free trial');
+  document.getElementById('pwSub').textContent = subbed ? 'You’re subscribed — thank you!' : (locked ? 'Subscribe to keep your plan, list and recipes.' : 'Everything you need to plan, shop & cook the week.');
+  const plansEl=document.getElementById('pwPlans'), cta=document.getElementById('pwCta');
+  if(subbed){ plansEl.style.display='none'; cta.textContent='You’re subscribed ✓'; cta.disabled=true; document.getElementById('pwNote').textContent='Manage or cancel anytime — contact us and we’ll help.'; }
+  else { plansEl.style.display='flex'; cta.disabled=false; cta.textContent='Start free trial'; renderPwPlans(); }
+  pw.classList.add('show');
+  closeAcct&&closeAcct();
+}
+function closePaywallIfAllowed(){ if(hasAccess()) document.getElementById('paywall').classList.remove('show'); }
+async function startCheckout(){
+  const cta=document.getElementById('pwCta'); const orig=cta.textContent; cta.textContent='Opening secure checkout…'; cta.disabled=true;
+  try{
+    const {data:res,error}=await sb.functions.invoke('create-checkout',{ body:{ plan:selectedPlan, return_url: location.origin+location.pathname } });
+    if(error||!res||!res.url){ askInfo('Checkout not ready yet', (res&&res.error)||(error&&error.message)||'Payments aren’t fully set up yet. Please try again shortly.'); cta.textContent=orig; cta.disabled=false; return; }
+    location.href=res.url;
+  }catch(e){ askInfo('Checkout error','Please try again in a moment.'); cta.textContent=orig; cta.disabled=false; }
+}
+async function refreshSub(){
+  const note=document.getElementById('pwNote'); note.textContent='Checking your subscription…';
+  const ok=await pollSubscription(1);
+  note.textContent = ok ? '✓ Subscription active — enjoy Larder Premium!' : 'No active subscription found yet. If you just paid, wait a few seconds and try again.';
+  if(ok){ document.getElementById('paywall').classList.remove('show'); }
+}
+async function pollSubscription(tries){
+  tries=tries||6;
+  for(let i=0;i<tries;i++){
+    try{
+      const {data:row}=await sb.from('profiles').select('subscription_status,trial_start').eq('user_id',profile.user_id).maybeSingle();
+      if(row){ profile.subscription_status=row.subscription_status; if(row.trial_start)profile.trial_start=row.trial_start; }
+      if(isSubscribed()){ applyGate(); return true; }
+    }catch(e){}
+    if(i<tries-1) await new Promise(r=>setTimeout(r,2000));
+  }
+  applyGate(); return false;
+}
+
+/* ---- onboarding wizard ---- */
+let obIndex=0;
+const OB_REFERRAL = ['TikTok','Instagram','Facebook','App Store','Google search','Friend or family','YouTube','Podcast','Other'];
+const OB_STEPS=[obStepHousehold, obStepAbout, obStepEnergy, obStepGoals, obStepDiet, obStepCuisine, obStepAllergies, obStepDislikes, obStepSkill, obStepGadgets, obStepPantry, obStepStores, obStepReferral];
+function startOnboarding(edit){
+  obEditMode=!!edit;
+  ob = edit && profile && profile.data ? JSON.parse(JSON.stringify(profile.data)) : newObState();
+  if(!ob.household) ob.household={adults:2,kids:0};
+  if(!Array.isArray(ob.cuisines)) ob.cuisines=[];
+  if(!Array.isArray(ob.goals)) ob.goals=[];
+  if(!Array.isArray(ob.stores)) ob.stores=[];
+  obIndex=0;
+  document.getElementById('authGate').classList.remove('show');
+  document.getElementById('obGate').classList.add('show');
+  renderOb();
+}
+function obStores(){ const s=[...OB_STORES_DEFAULT]; ob.stores.forEach(x=>{ if(!s.includes(x)) s.push(x); }); return s; }
+function chip(field, val, on){ return `<div class="chip ${on?'on':''}" data-f="${esc(field)}" data-v="${esc(val)}" onclick="obToggle(this)">${esc(val)}</div>`; }
+
+function obStepHousehold(){
+  return { title:'Who are we cooking for?', sub:'So portions and quantities are right for everyone at your table.',
+    html:`<div class="ob-label">Adults</div>
+      <div class="stepper"><button onclick="obStep('adults',-1)">−</button><span class="val" id="vAdults">${ob.household.adults}</span><button onclick="obStep('adults',1)">+</button><span class="lbl">grown-ups eating</span></div>
+      <div class="ob-label">Kids</div>
+      <div class="stepper"><button onclick="obStep('kids',-1)">−</button><span class="val" id="vKids">${ob.household.kids}</span><button onclick="obStep('kids',1)">+</button><span class="lbl">children eating</span></div>` };
+}
+function obStepAbout(){
+  const p=ob.person;
+  return { title:'About you', sub:'Used to calculate your energy needs and portion your meals. Just you — we tailor the main plan to you.',
+    html:`<div class="ob-label">Sex</div><div class="chips">${OB_SEX.map(s=>chip('sex',s, p.sex===s)).join('')}</div>
+      <div class="ob-label">Age</div><input class="ob-in" inputmode="numeric" placeholder="years" value="${esc(String(p.age||''))}" oninput="ob.person.age=this.value.replace(/[^0-9]/g,'')">
+      <div class="ob-label">Height</div><input class="ob-in" inputmode="numeric" placeholder="cm" value="${esc(String(p.heightCm||''))}" oninput="ob.person.heightCm=this.value.replace(/[^0-9]/g,'')">
+      <div class="ob-label">Current weight</div><input class="ob-in" inputmode="decimal" placeholder="kg" value="${esc(String(p.weightKg||''))}" oninput="ob.person.weightKg=this.value.replace(/[^0-9.]/g,'')">` };
+}
+function obStepEnergy(){
+  const p=ob.person; const sug=suggestedCalories();
+  let calHtml;
+  if(sug){
+    const opts=[sug-300, sug, sug+300].filter(x=>x>=1200);
+    calHtml=`<div class="ob-sub" style="margin-top:2px">Based on your details, we suggest about <b>${sug} kcal/day</b> for your goal. Adjust if you prefer.</div>
+      <div class="chips">${opts.map(o=>chip('calorieGoal', String(o), String(ob.calorieGoal)===String(o))).join('')}</div>
+      <div class="ob-label">Or set your own</div><input class="ob-in" inputmode="numeric" placeholder="kcal per day" value="${esc(String(ob.calorieGoal||''))}" oninput="ob.calorieGoal=this.value.replace(/[^0-9]/g,'')">`;
+  } else {
+    calHtml=`<div class="ob-sub" style="margin-top:2px">Pick your activity level above to see a suggested daily calorie target, or enter your own.</div>
+      <input class="ob-in" inputmode="numeric" placeholder="kcal per day (optional)" value="${esc(String(ob.calorieGoal||''))}" oninput="ob.calorieGoal=this.value.replace(/[^0-9]/g,'')">`;
+  }
+  return { title:'Activity & energy needs', sub:'How active are you day to day?',
+    html:`<div class="ob-label">Activity level</div><div class="chips">${OB_ACTIVITY.map(a=>chip('activity',a, p.activity===a)).join('')}</div>
+      <div class="ob-label">Daily calorie goal</div>${calHtml}` };
+}
+function obStepGoals(){
+  return { title:'What are your goals?', sub:'Pick everything that matters — your plan will optimise for these.',
+    html:`<div class="chips">${OB_GOALS.map(g=>chip('goals',g, ob.goals.includes(g))).join('')}</div>` };
+}
+function obStepDiet(){
+  return { title:'Food preferences', sub:'Pick the way of eating that fits you best.',
+    html:`<div class="chips">${OB_DIET.map(d=>chip('diet',d, ob.diet===d)).join('')}</div>` };
+}
+function obStepCuisine(){
+  return { title:'Cuisines you love', sub:'Choose a few — your weekly plan will lean into these.',
+    html:`<div class="chips">${OB_CUISINE.map(c=>chip('cuisines',c, ob.cuisines.includes(c))).join('')}</div>` };
+}
+function obStepAllergies(){
+  return { title:'Any allergies?', sub:'We’ll keep these out of every meal and your grocery list. Add anything else below.',
+    html:`<div class="chips">${OB_ALLERGENS.map(a=>chip('allergies',a, ob.allergies.includes(a))).join('')}</div>
+      <div class="ob-label">Other allergies</div>
+      <input class="ob-in" placeholder="e.g. kiwi, mustard" value="${esc(ob.allergiesOther||'')}" oninput="ob.allergiesOther=this.value">` };
+}
+function obStepDislikes(){
+  return { title:'Foods you dislike', sub:'Ingredients you’d rather never see. We’ll avoid them where we can.',
+    html:`<textarea class="ob-in" style="height:110px;resize:vertical;font-family:inherit" placeholder="e.g. mushrooms, olives, blue cheese, very spicy food" oninput="ob.dislikes=this.value">${esc(ob.dislikes||'')}</textarea>` };
+}
+function obStepSkill(){
+  return { title:'Your cooking level', sub:'So recipes match your confidence in the kitchen.',
+    html:`<div class="chips">${OB_SKILL.map(s=>chip('skill',s, ob.skill===s)).join('')}</div>
+      <div class="ob-sub" style="margin-top:14px">Beginner = simple, few steps · Advanced = happy with anything.</div>` };
+}
+function obStepGadgets(){
+  return { title:'Your kitchen gadgets', sub:'We’ll only suggest recipes you can actually make with what you have.',
+    html:`<div class="chips">${OB_GADGETS.map(g=>chip('gadgets',g, ob.gadgets.includes(g))).join('')}</div>` };
+}
+function obStepPantry(){
+  return { title:'What’s already in your pantry?', sub:'Staples you keep stocked — we’ll skip these on your shopping list.',
+    html:`<div class="chips">${OB_PANTRY.map(p=>chip('pantry',p, ob.pantry.includes(p))).join('')}</div>` };
+}
+function obStepStores(){
+  return { title:'Where do you shop?', sub:'Your grocery list gets auto-sorted into these exact stores. Add your own too.',
+    html:`<div class="chips">${obStores().map(s=>chip('stores',s, ob.stores.includes(s))).join('')}
+      <div class="chip add" onclick="obAddStore()">＋ Add a store</div></div>
+      <div class="ob-label">Weekly grocery budget (optional)</div>
+      <div class="chips">${OB_BUDGET.map(b=>chip('budget',b, ob.budget===b)).join('')}</div>` };
+}
+function obStepReferral(){
+  return { title:'How did you hear about us?', sub:'Last one — it helps us reach more home cooks like you.',
+    html:`<div class="chips">${OB_REFERRAL.map(r=>chip('referral',r, ob.referral===r)).join('')}</div>` };
+}
+function renderOb(){
+  const step=OB_STEPS[obIndex]();
+  document.getElementById('obProg').style.width=Math.round((obIndex)/(OB_STEPS.length)*100+ (100/OB_STEPS.length))+'%';
+  document.getElementById('obStepC').textContent='Step '+(obIndex+1)+' of '+OB_STEPS.length;
+  document.getElementById('obBody').innerHTML=`<div class="ob-h">${esc(step.title)}</div><div class="ob-sub">${esc(step.sub)}</div>${step.html}`;
+  const last=obIndex===OB_STEPS.length-1;
+  const back = obIndex>0 ? `<button class="btn" style="flex:.5" onclick="obBack()">Back</button>` : (obEditMode?`<button class="btn" style="flex:.5" onclick="obClose()">Cancel</button>`:'');
+  document.getElementById('obFoot').innerHTML = back + `<button class="btn primary" style="flex:1" onclick="obNext()">${last?(obEditMode?'Save & regenerate':'Create my plan ✨'):'Continue'}</button>`;
+}
+function obToggle(el){
+  const f=el.dataset.f, v=el.dataset.v;
+  if(f==='diet'||f==='skill'||f==='referral'){ ob[f]=v; }
+  else if(f==='sex'||f==='activity'){ ob.person[f]=v; }
+  else if(f==='budget'||f==='calorieGoal'){ ob[f] = String(ob[f])===String(v)?'':v; }
+  else { const arr=ob[f]; const i=arr.indexOf(v); if(i>=0)arr.splice(i,1); else arr.push(v); }
+  renderOb();
+}
+function obStep(k,d){ ob.household[k]=Math.max(k==='adults'?1:0, (ob.household[k]||0)+d); const el=document.getElementById(k==='adults'?'vAdults':'vKids'); if(el)el.textContent=ob.household[k]; }
+function obAddStore(){ askInput('Add a store','', v=>{ v=(v||'').trim(); if(!v)return; if(!ob.stores.includes(v))ob.stores.push(v); renderOb(); }, {placeholder:'e.g. Local greengrocer', okText:'Add'}); }
+function obBack(){ if(obIndex>0){ obIndex--; renderOb(); } }
+function obClose(){ document.getElementById('obGate').classList.remove('show'); if(profile&&profile.data.onboarded) applyGate(); }
+function obNext(){
+  const cur=OB_STEPS[obIndex], p=ob.person;
+  if(cur===obStepAbout && (!p.sex||!p.age||!p.heightCm||!p.weightKg)){ askInfo('A few details needed','Please add your sex, age, height and weight so we can size your meals and energy needs.'); return; }
+  if(cur===obStepEnergy){ if(!p.activity){ askInfo('Pick your activity','Choose how active you are so we can set your calorie target.'); return; } if(!ob.calorieGoal){ const s=suggestedCalories(); if(s) ob.calorieGoal=s; } }
+  if(cur===obStepCuisine && ob.cuisines.length===0){ askInfo('Pick at least one','Choose one or more cuisines you enjoy so we can build a plan you’ll love.'); return; }
+  if(cur===obStepStores && ob.stores.length===0){ askInfo('Add a store','Select at least one place you shop so we can sort your grocery list.'); return; }
+  if(obIndex<OB_STEPS.length-1){ obIndex++; renderOb(); return; }
+  finishOnboarding();
+}
+async function finishOnboarding(){
+  ob.onboarded=true;
+  profile.data=JSON.parse(JSON.stringify(ob));
+  await saveProfileData();
+  await generatePlan();
+}
+
+/* ---- AI plan generation ---- */
+function obGenerating(msg){
+  document.getElementById('obGate').classList.add('show');
+  document.getElementById('obProg').style.width='100%';
+  document.getElementById('obStepC').textContent='Building your plan';
+  document.getElementById('obBody').innerHTML=`<div class="ob-gen"><div class="spin"></div><div class="ob-h" style="font-size:22px">${esc(msg||'Creating your week…')}</div><div class="ob-sub">Personalising meals, recipes and your grocery list. This takes a few seconds.</div></div>`;
+  document.getElementById('obFoot').innerHTML='';
+}
+async function generatePlan(){
+  obGenerating('Creating your week…');
+  try{
+    const {data:res,error}=await sb.functions.invoke('generate-plan',{ body:{ profile: profile.data } });
+    if(error || !res || !(Array.isArray(res.days)&&res.days.length)){
+      document.getElementById('obBody').innerHTML=`<div class="ob-gen"><div class="ob-h" style="font-size:22px">Couldn’t build the plan</div><div class="ob-sub">${esc((res&&res.error)||(error&&error.message)||'The planner isn’t fully set up yet.')}</div></div>`;
+      document.getElementById('obFoot').innerHTML=`<button class="btn" style="flex:.5" onclick="obClose()">Later</button><button class="btn primary" style="flex:1" onclick="generatePlan()">Try again</button>`;
+      return;
+    }
+    applyGenerated(res);
+    document.getElementById('obGate').classList.remove('show');
+    showTab('plan'); applyGate();
+  }catch(e){
+    document.getElementById('obFoot').innerHTML=`<button class="btn" style="flex:.5" onclick="obClose()">Later</button><button class="btn primary" style="flex:1" onclick="generatePlan()">Try again</button>`;
+  }
+}
+function regeneratePlan(){
+  if(!profile || !profile.data.onboarded){ startOnboarding(false); return; }
+  askConfirm('Regenerate your plan?','Build a fresh 7-day plan and grocery list from your saved preferences? This replaces the current plan.', ()=>generatePlan());
+}
+function editPrefs(){ closeAcct(); startOnboarding(true); }
+function storeEmoji(name){
+  const n=(name||'').toLowerCase();
+  if(n.includes('costco'))return '📦'; if(n.includes('cole'))return '🛒'; if(n.includes('wool'))return '🛒';
+  if(n.includes('aldi'))return '🛍️'; if(n.includes('indian'))return '🏪'; if(n.includes('asian'))return '🥢';
+  if(n.includes('butcher')||n.includes('meat'))return '🥩'; if(n.includes('farm')||n.includes('green')||n.includes('market'))return '🥬';
+  if(n.includes('fish')||n.includes('seafood'))return '🐟'; if(n.includes('bak'))return '🍞'; return '🛒';
+}
+function applyGenerated(mp){
+  mp.recipesMap={}; (mp.recipes||[]).forEach(r=>{ if(r&&r.name) mp.recipesMap[String(r.name).toLowerCase()]=r; });
+  data.mealplan=mp;
+  const userStores = (profile&&profile.data&&profile.data.stores&&profile.data.stores.length)? profile.data.stores : null;
+  const groups={}; const order=[];
+  (mp.shopping||[]).forEach(x=>{
+    let store = (x.store||'').trim();
+    if(userStores){ const hit=userStores.find(s=>s.toLowerCase()===store.toLowerCase()) || userStores.find(s=>store && (s.toLowerCase().includes(store.toLowerCase())||store.toLowerCase().includes(s.toLowerCase()))); store = hit || store; }
+    if(!store) store = userStores? userStores[userStores.length-1] : (x.section||'Other');
+    if(!groups[store]){ groups[store]=[]; order.push(store); }
+    const note=[x.note||'', x.section||''].filter(Boolean).join(' · ');
+    groups[store].push(it(x.name||'Item', note));
+  });
+  if(order.length){ data.stores = order.map(s=>({ id:'p'+uid(), name:storeEmoji(s)+' '+s, collapsed:false, items:groups[s] })); }
+  planDay=0; data.updatedAt=Date.now(); saveLocal(); render(); schedulePush();
+}
 
 render();
 /* sync + login are started by the auth bootstrap above */

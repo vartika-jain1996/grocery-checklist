@@ -191,6 +191,7 @@
   .ask-in{ width:100%; font-size:16px; padding:11px 12px; border:1.5px solid var(--line); border-radius:10px; }
   .ask-in:focus{ outline:none; border-color:var(--teal); }
   .ask-msg{ font-size:13.5px; color:var(--muted); line-height:1.45; }
+  .ask-msg.ok{ color:var(--teal); }
   .btn.submit{ background:#0f766e; color:#fff; border-color:#0f766e; font-size:15px; padding:13px; }
   .cost-sum{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin:12px 0; }
   .cs-box{ background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 6px; text-align:center; }
@@ -318,6 +319,11 @@
       <div class="rc-h">Share this list</div>
       <div class="ask-msg">Give this code to your partner so you both use the same list.</div>
       <div class="share-row"><input id="shareCode" class="ask-in" readonly><button class="btn" id="copyShareBtn" onclick="copyShare()">Copy</button></div>
+      <div class="rc-h">Invite by email</div>
+      <div class="ask-msg">Enter a partner or housemate's email — they'll join this list automatically when they sign in with it.</div>
+      <input id="inviteEmail" class="ask-in" type="email" placeholder="their@email.com">
+      <button class="btn primary" style="width:100%;margin-top:8px" onclick="inviteByEmail()">Send invite</button>
+      <div id="inviteMsg" class="ask-msg"></div>
       <div class="rc-h">Join a shared list</div>
       <input id="joinCode" class="ask-in" placeholder="Paste a share code">
       <button class="btn primary" style="width:100%;margin-top:8px" onclick="joinList()">Join list</button>
@@ -446,9 +452,19 @@ async function afterLogin(){
   document.getElementById('authGate').classList.remove('show');
   document.getElementById('acctBtn').style.display='';
   try{
+    // accept any pending email invites addressed to this account
+    let invitedListId=null;
+    try{
+      const {data:invs} = await sb.from('list_invites').select('id,list_id');
+      if(invs && invs.length){
+        for(const inv of invs){ await sb.from('list_access').insert({list_id:inv.list_id}); await sb.from('list_invites').delete().eq('id', inv.id); }
+        invitedListId = invs[0].list_id;
+      }
+    }catch(e){}
     const {data:acc} = await sb.from('list_access').select('list_id');
     let id=null;
-    if(acc && acc.length){
+    if(invitedListId){ id=invitedListId; }
+    else if(acc && acc.length){
       const saved=localStorage.getItem('activeList');
       id = (saved && acc.some(a=>a.list_id===saved)) ? saved : acc[0].list_id;
     } else {
@@ -517,7 +533,20 @@ async function doMagic(){
 async function signOut(){ await sb.auth.signOut(); localStorage.removeItem('activeList'); closeAcct(); showLogin(); }
 
 /* account + sharing */
-function openAcct(){ document.getElementById('acctEmail').textContent = (session&&session.user)?session.user.email:''; document.getElementById('shareCode').value = activeListId||''; document.getElementById('joinCode').value=''; document.getElementById('joinMsg').textContent=''; document.getElementById('acctModal').classList.add('show'); }
+function openAcct(){ document.getElementById('acctEmail').textContent = (session&&session.user)?session.user.email:''; document.getElementById('shareCode').value = activeListId||''; document.getElementById('joinCode').value=''; document.getElementById('joinMsg').textContent=''; document.getElementById('inviteEmail').value=''; document.getElementById('inviteMsg').textContent=''; document.getElementById('acctModal').classList.add('show'); }
+async function inviteByEmail(){
+  const em=(document.getElementById('inviteEmail').value||'').trim().toLowerCase();
+  const msg=document.getElementById('inviteMsg');
+  if(!validEmail(em)){ msg.className='ask-msg'; msg.textContent='Enter a valid email address.'; return; }
+  if(!activeListId){ msg.textContent='No active list to share.'; return; }
+  msg.className='ask-msg'; msg.textContent='Inviting…';
+  try{
+    const {error}=await sb.from('list_invites').insert({list_id:activeListId, email:em});
+    if(error){ msg.textContent='Could not invite: '+(error.message||''); return; }
+    msg.className='ask-msg ok'; msg.textContent='✓ Invited '+em+'. They join this list when they sign in with that email.';
+    document.getElementById('inviteEmail').value='';
+  }catch(e){ msg.textContent='Could not invite. Try again.'; }
+}
 function closeAcct(){ document.getElementById('acctModal').classList.remove('show'); }
 function copyShare(){ navigator.clipboard.writeText(activeListId||'').then(()=>{ const b=document.getElementById('copyShareBtn'); b.textContent='Copied ✓'; setTimeout(()=>b.textContent='Copy',1500); }); }
 async function joinList(){ const code=(document.getElementById('joinCode').value||'').trim(); const jm=document.getElementById('joinMsg'); if(!code) return; jm.textContent='Joining…';

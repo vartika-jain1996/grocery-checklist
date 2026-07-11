@@ -539,7 +539,12 @@ const SUPA_KEY = "sb_publishable_EIU5NMbeUTy0mdhUQLP3Ug_jGTPiMki";
 const EDIT_CODE = "2580";  // code required to unlock Edit mode
 /* ===================================== */
 
-const LKEY = "grocery_checklist_v3";
+/* ---- Build environment: TEST (/test/ path) vs PROD (root) ---- */
+const TEST_ENV = /(^|\/)test(\/|$)/.test(location.pathname);
+const ENV_SUFFIX = TEST_ENV ? "_test" : "";
+const K_ACTIVE = "activeList" + ENV_SUFFIX;
+const K_FIRST  = "larder_first" + ENV_SUFFIX;
+const LKEY = "grocery_checklist_v3" + ENV_SUFFIX;
 let editing = false, pushTimer = null, pulling = false;
 
 const SEED = { updatedAt:0, submissions:[], stores:[
@@ -574,7 +579,7 @@ let data = load();
 function load(){ try{ const s=JSON.parse(localStorage.getItem(LKEY)); if(s&&s.stores){ if(!s.submissions) s.submissions=[]; return s; } }catch(e){} return JSON.parse(JSON.stringify(SEED)); }
 function saveLocal(){ data.updatedAt=Date.now(); localStorage.setItem(LKEY, JSON.stringify(data)); }
 
-const sb = window.supabase.createClient(SUPA_URL, SUPA_KEY, {auth:{persistSession:true, autoRefreshToken:true, detectSessionInUrl:true}});
+const sb = window.supabase.createClient(SUPA_URL, SUPA_KEY, {auth:{persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, storageKey: TEST_ENV?'sb-larder-test':undefined}});
 let cloudOn = false, activeListId = null, session = null;
 function setSync(t,cls){ const e=document.getElementById('sync'); e.textContent=t; e.className='sync '+(cls||''); }
 function fmtDate(ts){ return new Date(ts).toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'}); }
@@ -632,7 +637,7 @@ async function afterLogin(){
     let id=null;
     if(invitedListId){ id=invitedListId; }
     else if(acc && acc.length){
-      const saved=localStorage.getItem('activeList');
+      const saved=localStorage.getItem(K_ACTIVE);
       id = (saved && acc.some(a=>a.list_id===saved)) ? saved : acc[0].list_id;
     } else {
       const seed=JSON.parse(JSON.stringify(SEED)); seed.updatedAt=Date.now();
@@ -642,7 +647,7 @@ async function afterLogin(){
       await sb.from('list_access').insert({list_id:id});
       data=seed; localStorage.setItem(LKEY, JSON.stringify(data));
     }
-    activeListId=id; localStorage.setItem('activeList', id); cloudOn=true;
+    activeListId=id; localStorage.setItem(K_ACTIVE, id); cloudOn=true;
     await pull(); render();
     if(!window._syncInt){ window._syncInt=setInterval(pull,5000); document.addEventListener('visibilitychange',()=>{ if(!document.hidden) pull(); }); }
     await loadProfileAndGate();
@@ -671,7 +676,7 @@ function goAuth(m){ document.getElementById('welcome').classList.remove('show');
 function doAuthPrimary(){ if(_authMode==='signup') doSignUp(); else doSignIn(); }
 function goImport(){
   const w=document.getElementById('welcome'); if(w) w.classList.remove('show');
-  if(cloudOn && session){ openImport(); }
+  if(cloudOn && session){ if(canUseApp()){ openImport(); } else { selectedPlan='byo'; openPaywall(); } }
   else { window._pendingImport=true; goAuth('signup'); }
 }
 
@@ -703,7 +708,7 @@ async function doSignIn(){
 async function doSignUp(){
   const em=authEmail(), pw=document.getElementById('authPass').value;
   const fn=(document.getElementById('authFirst').value||'').trim();
-  if(fn) localStorage.setItem('larder_first', fn);
+  if(fn) localStorage.setItem(K_FIRST, fn);
   if(!validEmail(em)){ authMsg('Enter a valid email address.'); return; }
   if(pw.length<6){ authMsg('Choose a password of at least 6 characters.'); return; }
   authMsg('Creating account…',true);
@@ -722,7 +727,7 @@ async function doMagic(){
     authMsg(error?friendlyAuthError(error.message):'Sent! Check your email (and spam) for the login link — no password needed.', !error);
   }catch(e){ authMsg(friendlyAuthError(e.message)); }
 }
-async function signOut(){ await sb.auth.signOut(); localStorage.removeItem('activeList'); closeAcct(); showLogin(); }
+async function signOut(){ await sb.auth.signOut(); localStorage.removeItem(K_ACTIVE); closeAcct(); showLogin(); }
 
 /* account + sharing */
 function openAcct(){ document.getElementById('acctEmail').textContent = (session&&session.user)?session.user.email:''; document.getElementById('shareCode').value = activeListId||''; document.getElementById('joinCode').value=''; document.getElementById('joinMsg').textContent=''; document.getElementById('inviteEmail').value=''; document.getElementById('inviteMsg').textContent=''; document.getElementById('acctModal').classList.add('show'); }
@@ -746,7 +751,7 @@ async function joinList(){ const code=(document.getElementById('joinCode').value
   if(error && !/duplicate|already exists/i.test(error.message)){ jm.textContent='Could not join — check the code.'; return; }
   const {data:row,error:e2}=await sb.from('lists').select('data').eq('id',code).single();
   if(e2||!row){ jm.textContent='That code doesn’t match a list.'; return; }
-  activeListId=code; localStorage.setItem('activeList',code); data=row.data||JSON.parse(JSON.stringify(SEED)); if(!data.submissions)data.submissions=[]; localStorage.setItem(LKEY,JSON.stringify(data)); render(); closeAcct(); setSync('Synced ✓');
+  activeListId=code; localStorage.setItem(K_ACTIVE,code); data=row.data||JSON.parse(JSON.stringify(SEED)); if(!data.submissions)data.submissions=[]; localStorage.setItem(LKEY,JSON.stringify(data)); render(); closeAcct(); setSync('Synced ✓');
 }
 
 /* bootstrap */
@@ -1199,13 +1204,16 @@ function resetAll(){ askConfirm('Reset all ticks?', 'Clears all ticks (keeps you
 /* ==================================================================
    PROFILE · ONBOARDING · AI PLAN · TRIAL + STRIPE PAYWALL
    ================================================================== */
-const TRIAL_DAYS = 7;
-/* Two-tier subscription (amounts shown here must match the Stripe Prices VJ creates) */
+/* Two ways to unlock (amounts must match the Stripe Prices VJ creates) */
 const PLANS = {
-  annual:  { key:'annual',  label:'Annual',  amount:'$69.99', per:'$5.83 / month', save:'SAVE 58%', trialLine:'7 days free, then $69.99 per year' },
-  monthly: { key:'monthly', label:'Monthly', amount:'$13.99', per:'per month',      save:'',         trialLine:'7 days free, then $13.99 per month' }
+  ai:  { key:'ai',  label:'AI builds my plan', amount:'$49.99', per:'one-time', save:'MOST POPULAR', mode:'payment',
+         cta:'Generate my plan — $49.99',
+         note:'Our AI builds a personalised weekly plan, recipes and store-sorted grocery list from your answers. One-time, per plan.' },
+  byo: { key:'byo', label:'I have my own plan', amount:'$5', per:'/ month', save:'', mode:'subscription',
+         cta:'Subscribe — $5/month',
+         note:'Already have a plan? Upload it and use every tool — checklist, recipes, prep, receipts and sharing. $5/month, cancel anytime.' }
 };
-let selectedPlan = 'annual';
+let selectedPlan = 'ai';
 let profile = null;            // { user_id, data:{...answers}, trial_start, subscription_status, stripe_customer_id }
 let obEditMode = false;
 
@@ -1252,7 +1260,7 @@ async function loadProfileAndGate(){
     }
     profile = row;
     if(!profile.data) profile.data = newObState();
-    const fn=localStorage.getItem('larder_first'); if(fn && !profile.data.firstName){ profile.data.firstName=fn; saveProfileData(); }
+    const fn=localStorage.getItem(K_FIRST); if(fn && !profile.data.firstName){ profile.data.firstName=fn; saveProfileData(); }
   }catch(e){ profile = { user_id:uid, data:newObState(), trial_start:new Date().toISOString(), subscription_status:'trialing' }; }
 
   // returning from a Stripe checkout?
@@ -1273,46 +1281,40 @@ async function saveProfileData(){
 }
 
 /* ---- trial / subscription gating ---- */
-function trialEndMs(){ const t = profile && profile.trial_start ? Date.parse(profile.trial_start) : Date.now(); return t + TRIAL_DAYS*86400000; }
 function isSubscribed(){ return profile && profile.subscription_status==='active'; }
-function hasAccess(){ return isSubscribed() || Date.now() < trialEndMs(); }
+function aiCredits(){ return (profile && +profile.ai_credits) || 0; }
+function aiPaid(){ return !!(profile && profile.ai_paid); }
+function canUseApp(){ return isSubscribed() || aiPaid(); }
+function canGenerate(){ return aiCredits()>0; }
 function applyGate(){
   const bar=document.getElementById('trialbar');
-  if(hasAccess()){
-    document.getElementById('paywall').classList.remove('show');
-    if(isSubscribed()){ bar.classList.remove('show'); }
-    else {
-      const days=Math.max(0, Math.ceil((trialEndMs()-Date.now())/86400000));
-      document.getElementById('trialText').textContent = days<=1 ? 'Free trial ends today' : ('Free trial · '+days+' days left');
-      bar.classList.add('show');
-    }
-  } else {
-    bar.classList.remove('show');
-    openPaywall(true);
-  }
+  if(canUseApp()){ document.getElementById('paywall').classList.remove('show'); bar.classList.remove('show'); }
+  else { bar.classList.remove('show'); openPaywall(true); }
   updateAcctSub();
 }
 function updateAcctSub(){
   const el=document.getElementById('acctSubLine'); if(!el||!profile) return;
-  if(isSubscribed()){ el.className='ask-msg ok'; el.textContent='✓ Larder Premium — active subscription'; }
-  else { const days=Math.max(0, Math.ceil((trialEndMs()-Date.now())/86400000)); el.className='ask-msg'; el.textContent=days>0?('Free trial — '+days+' day'+(days===1?'':'s')+' left'):'Free trial ended'; }
+  if(isSubscribed()){ el.className='ask-msg ok'; el.textContent='✓ Larder — $5/month subscription active'; }
+  else if(aiPaid()){ el.className='ask-msg ok'; el.textContent='✓ AI plan unlocked'+(aiCredits()>0?(' · '+aiCredits()+' AI generation'+(aiCredits()>1?'s':'')+' available'):''); }
+  else { el.className='ask-msg'; el.textContent='Choose how to start to unlock Larder'; }
 }
 
 /* ---- paywall ---- */
 function renderPwPlans(){
   const el=document.getElementById('pwPlans'); if(!el) return;
   el.innerHTML=Object.values(PLANS).map(p=>`<div class="pw-plan ${selectedPlan===p.key?'on':''}" onclick="selectPlan('${p.key}')">${p.save?`<span class="save">${p.save}</span>`:''}<div class="pl">${p.label}</div><div class="amt">${p.amount}</div><div class="per">${esc(p.per)}</div></div>`).join('');
-  const note=document.getElementById('pwNote'); if(note) note.textContent=PLANS[selectedPlan].trialLine;
+  const note=document.getElementById('pwNote'); if(note) note.textContent=PLANS[selectedPlan].note;
+  const cta=document.getElementById('pwCta'); if(cta) cta.textContent=PLANS[selectedPlan].cta;
 }
 function selectPlan(k){ selectedPlan=k; renderPwPlans(); }
 function openPaywall(locked){
   const pw=document.getElementById('paywall');
-  const subbed=isSubscribed();
-  document.getElementById('pwTitle').textContent = subbed ? 'Larder Premium' : (locked ? 'Your free trial has ended' : 'Start your free trial');
-  document.getElementById('pwSub').textContent = subbed ? 'You’re subscribed — thank you!' : (locked ? 'Subscribe to keep your plan, list and recipes.' : 'Everything you need to plan, shop & cook the week.');
+  const ok=canUseApp();
+  document.getElementById('pwTitle').textContent = ok ? 'Larder Premium' : 'Choose how to start';
+  document.getElementById('pwSub').textContent = ok ? 'You’re all set — enjoy Larder.' : 'Let our AI build your plan, or bring your own for $5/month.';
   const plansEl=document.getElementById('pwPlans'), cta=document.getElementById('pwCta');
-  if(subbed){ plansEl.style.display='none'; cta.textContent='You’re subscribed ✓'; cta.disabled=true; document.getElementById('pwNote').textContent='Manage or cancel anytime — contact us and we’ll help.'; }
-  else { plansEl.style.display='flex'; cta.disabled=false; cta.textContent='Start free trial'; renderPwPlans(); }
+  if(ok){ plansEl.style.display='none'; cta.style.display='none'; document.getElementById('pwNote').textContent='Manage or cancel anytime — just contact us.'; }
+  else { plansEl.style.display='flex'; cta.style.display=''; cta.disabled=false; renderPwPlans(); }
   pw.classList.add('show');
   closeAcct&&closeAcct();
 }
@@ -1320,7 +1322,7 @@ function closePaywallIfAllowed(){ if(hasAccess()) document.getElementById('paywa
 async function startCheckout(){
   const cta=document.getElementById('pwCta'); const orig=cta.textContent; cta.textContent='Opening secure checkout…'; cta.disabled=true;
   try{
-    const {data:res,error}=await sb.functions.invoke('create-checkout',{ body:{ plan:selectedPlan, return_url: location.origin+location.pathname } });
+    const {data:res,error}=await sb.functions.invoke('create-checkout',{ body:{ plan:selectedPlan, env: TEST_ENV?'test':'live', return_url: location.origin+location.pathname } });
     if(error||!res||!res.url){ askInfo('Checkout not ready yet', (res&&res.error)||(error&&error.message)||'Payments aren’t fully set up yet. Please try again shortly.'); cta.textContent=orig; cta.disabled=false; return; }
     location.href=res.url;
   }catch(e){ askInfo('Checkout error','Please try again in a moment.'); cta.textContent=orig; cta.disabled=false; }
@@ -1335,14 +1337,15 @@ async function pollSubscription(tries){
   tries=tries||6;
   for(let i=0;i<tries;i++){
     try{
-      const {data:row}=await sb.from('profiles').select('subscription_status,trial_start').eq('user_id',profile.user_id).maybeSingle();
-      if(row){ profile.subscription_status=row.subscription_status; if(row.trial_start)profile.trial_start=row.trial_start; }
-      if(isSubscribed()){ applyGate(); return true; }
+      const {data:row}=await sb.from('profiles').select('subscription_status,ai_credits,ai_paid').eq('user_id',profile.user_id).maybeSingle();
+      if(row){ profile.subscription_status=row.subscription_status; profile.ai_credits=row.ai_credits; profile.ai_paid=row.ai_paid; }
+      if(canUseApp()){ applyGate(); maybeAutoGenerate(); return true; }
     }catch(e){}
     if(i<tries-1) await new Promise(r=>setTimeout(r,2000));
   }
   applyGate(); return false;
 }
+function maybeAutoGenerate(){ if(profile && profile.data && profile.data.onboarded && canGenerate() && !(data.mealplan && data.mealplan.days && data.mealplan.days.length)){ generatePlan(); } }
 
 /* ---- onboarding wizard ---- */
 let obIndex=0;
@@ -1481,7 +1484,8 @@ async function finishOnboarding(){
   ob.onboarded=true;
   profile.data=JSON.parse(JSON.stringify(ob));
   await saveProfileData();
-  await generatePlan();
+  if(canGenerate()){ await generatePlan(); }
+  else { document.getElementById('obGate').classList.remove('show'); selectedPlan='ai'; openPaywall(); }
 }
 
 /* ---- AI plan generation ---- */
@@ -1502,6 +1506,7 @@ async function generatePlan(){
       return;
     }
     applyGenerated(res);
+    if(profile && aiCredits()>0){ profile.ai_credits=Math.max(0, aiCredits()-1); try{ await sb.from('profiles').update({ai_credits:profile.ai_credits}).eq('user_id',profile.user_id); }catch(e){} }
     document.getElementById('obGate').classList.remove('show');
     showTab('plan'); applyGate();
   }catch(e){
@@ -1510,7 +1515,8 @@ async function generatePlan(){
 }
 function regeneratePlan(){
   if(!profile || !profile.data.onboarded){ startOnboarding(false); return; }
-  askConfirm('Regenerate your plan?','Build a fresh 7-day plan and grocery list from your saved preferences? This replaces the current plan.', ()=>generatePlan());
+  if(!canGenerate()){ selectedPlan='ai'; openPaywall(); return; }
+  askConfirm('Generate a new plan?','This uses one AI generation ($49.99 each) to build a fresh 7-day plan and grocery list from your saved preferences, replacing the current one.', ()=>generatePlan());
 }
 function editPrefs(){ closeAcct(); startOnboarding(true); }
 function storeEmoji(name){
@@ -1537,9 +1543,19 @@ function applyGenerated(mp){
   planDay=0; data.updatedAt=Date.now(); saveLocal(); render(); schedulePush();
 }
 
+/* ---- TEST build badge ---- */
+if(TEST_ENV){
+  try{ document.title='Larder · TEST'; }catch(e){}
+  const b=document.createElement('div'); b.id='testRibbon';
+  b.textContent='TEST BUILD — Stripe test mode';
+  b.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:200;background:#b4894c;color:#fff;font:600 12px "Inter",sans-serif;text-align:center;padding:6px 10px;letter-spacing:.3px;box-shadow:0 -2px 10px rgba(0,0,0,.15)';
+  window.addEventListener('DOMContentLoaded',()=>document.body.appendChild(b));
+  if(document.body) document.body.appendChild(b);
+}
+
 render();
 /* sync + login are started by the auth bootstrap above */
-if('serviceWorker' in navigator){ window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{})); }
+if(!TEST_ENV && 'serviceWorker' in navigator){ window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{})); }
 </script>
 </body>
 </html>

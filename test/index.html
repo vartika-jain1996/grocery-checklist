@@ -1,0 +1,1561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#2e5d4b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Larder">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="favicon-32.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<title>Larder — weekly meal &amp; grocery planner</title>
+<style>
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  :root{
+    --bg:#f6f3ee; --card:#ffffff; --ink:#22271f; --muted:#7c837a;
+    --line:#e7e2d9; --teal:#2e5d4b; --teal-soft:#e7f0eb; --done:#a6ada3;
+    --gold:#b4894c; --brand:#2e5d4b; --shadow:0 1px 2px rgba(34,39,31,.04),0 6px 20px rgba(34,39,31,.06);
+    --serif:"Fraunces",Georgia,"Times New Roman",serif;
+  }
+  body{ margin:0; font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg); color:var(--ink); line-height:1.45; padding-bottom:48px; -webkit-font-smoothing:antialiased; }
+  .topbar{ position:sticky; top:0; z-index:20; background:var(--bg); box-shadow:0 4px 18px rgba(34,39,31,.07); }
+  header{ position:relative; z-index:10; background:linear-gradient(160deg,#356a54 0%,#2e5d4b 55%,#264d3f 100%); color:#fff;
+    padding:16px 18px 15px; }
+  .titlerow{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .brandmark{ display:flex; align-items:center; gap:9px; }
+  .brandmark .mark{ width:30px; height:30px; border-radius:9px; background:rgba(255,255,255,.14); display:flex; align-items:center; justify-content:center; font-size:16px; }
+  .acct-btn{ border:none; background:rgba(255,255,255,.16); color:#fff; width:32px; height:32px; border-radius:50%; font-size:15px; cursor:pointer; line-height:1; }
+  .trialbar{ display:none; align-items:center; justify-content:space-between; gap:10px; background:#fbf6ec; border-bottom:1px solid #efe4cf; color:#6b4e21; font-size:12px; font-weight:600; padding:7px 16px; }
+  .trialbar.show{ display:flex; }
+  .trialbar button{ border:none; background:var(--gold); color:#fff; font-weight:700; font-size:11.5px; padding:6px 12px; border-radius:8px; cursor:pointer; flex:none; }
+  .auth-gate{ position:fixed; inset:0; z-index:100; background:var(--teal); display:none; align-items:center; justify-content:center; padding:20px; }
+  .auth-gate.show{ display:flex; }
+  .auth-card{ background:var(--card); border-radius:16px; padding:26px 22px; width:100%; max-width:360px; text-align:center; box-shadow:0 10px 40px rgba(0,0,0,.25); }
+  .auth-logo{ font-size:40px; }
+  .auth-card h2{ margin:6px 0 2px; font-size:20px; }
+  .auth-sub{ margin:0 0 18px; font-size:13px; color:var(--muted); }
+  .auth-in{ width:100%; padding:12px; font-size:15px; border:1.5px solid var(--line); border-radius:10px; margin-bottom:10px; }
+  .auth-in:focus{ outline:none; border-color:var(--teal); }
+  .auth-row{ display:flex; gap:8px; }
+  .auth-or{ font-size:12px; color:var(--muted); margin:12px 0; }
+  .auth-msg{ font-size:12.5px; color:#b91c1c; margin-top:10px; min-height:16px; line-height:1.4; }
+  .auth-msg.ok{ color:var(--teal); }
+  .auth-hint{ font-size:11px; color:var(--muted); margin-top:7px; }
+  .google-btn{ width:100%; display:flex; align-items:center; justify-content:center; gap:9px; background:#fff; color:#1a2230; border:1.5px solid var(--line); font-weight:700; padding:12px; }
+  .g-icon{ display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%; background:conic-gradient(from -45deg,#ea4335 0 25%,#fbbc05 0 50%,#34a853 0 75%,#4285f4 0); color:#fff; font-weight:800; font-size:12px; }
+  .acct-email{ font-size:13px; color:var(--muted); margin-bottom:4px; }
+  .share-row{ display:flex; gap:8px; }
+  .share-row .ask-in{ flex:1; font-size:11px; }
+  h1{ margin:0; font-family:var(--serif); font-size:23px; font-weight:600; letter-spacing:-.3px; line-height:1; }
+  .sync{ font-size:11px; font-weight:600; padding:4px 9px; border-radius:20px; background:rgba(255,255,255,.18); white-space:nowrap; }
+  .sync.off{ background:#b91c1c; }
+  .sub{ font-size:12.5px; opacity:.85; margin-top:2px; }
+  .progwrap{ margin-top:12px; }
+  .progbar{ height:8px; background:rgba(255,255,255,.25); border-radius:6px; overflow:hidden; }
+  .progfill{ height:100%; background:#fff; width:0%; transition:width .3s ease; border-radius:6px; }
+  .progtext{ font-size:12px; margin-top:5px; opacity:.9; }
+
+  .tabs{ display:flex; gap:4px; padding:10px 14px 8px; max-width:720px; margin:0 auto; background:var(--bg); }
+  .tab{ flex:1; text-align:center; padding:9px 8px; font-size:13px; font-weight:600;
+    background:transparent; border:none; border-radius:9px;
+    color:var(--muted); cursor:pointer; user-select:none; transition:.15s; }
+  .tab.active{ color:var(--brand); background:var(--card); box-shadow:var(--shadow); font-weight:700; }
+
+  main{ max-width:720px; margin:0 auto; padding:6px 14px; }
+  .store{ background:var(--card); border:1px solid var(--line); border-radius:14px; margin:12px 0; overflow:hidden; box-shadow:var(--shadow); }
+  .store-head{ display:flex; align-items:center; gap:10px; padding:13px 15px; cursor:pointer; }
+  .chev{ transition:transform .2s; flex:none; color:var(--muted); }
+  .store.collapsed .chev{ transform:rotate(-90deg); }
+  .store-title{ font-size:15px; font-weight:700; flex:1; }
+  .store-title[contenteditable]{ outline:none; border-bottom:1px dashed var(--teal); }
+  .store-count{ font-size:12px; color:var(--muted); font-weight:600; background:var(--bg); padding:3px 9px; border-radius:20px; }
+  .del-store{ flex:none; color:#b91c1c; font-size:18px; padding:0 4px; cursor:pointer; }
+  .items{ border-top:1px solid var(--line); }
+  .store.collapsed .items{ display:none; }
+  .item{ display:flex; align-items:flex-start; gap:12px; padding:12px 15px; border-bottom:1px solid var(--line); }
+  .item:last-child{ border-bottom:none; }
+  .box{ flex:none; width:22px; height:22px; border:2px solid #c4ccd6; border-radius:6px; margin-top:1px;
+    display:flex; align-items:center; justify-content:center; transition:.15s; cursor:pointer; }
+  .item.done .box{ background:var(--teal); border-color:var(--teal); }
+  .box svg{ width:14px; height:14px; opacity:0; }
+  .item.done .box svg{ opacity:1; }
+  .txt{ flex:1; cursor:pointer; }
+  .name{ font-size:14.5px; font-weight:600; }
+  .item.done .name{ color:var(--done); text-decoration:line-through; }
+  .note{ font-size:12px; color:var(--muted); margin-top:2px; }
+  .stamp{ font-size:11px; color:var(--teal); margin-top:3px; font-weight:600; }
+  .item.done .stamp{ color:var(--done); }
+  .del-item{ flex:none; color:#b91c1c; font-size:17px; padding:2px 4px; cursor:pointer; display:none; }
+  body.editing .del-item{ display:block; }
+  body.editing .del-store{ display:block; }
+  .del-store{ display:none; }
+
+  .additem{ display:none; padding:10px 15px; gap:8px; border-top:1px dashed var(--line); background:#fafbfc; }
+  body.editing .additem{ display:flex; }
+  .additem input{ flex:1; padding:9px 11px; font-size:14px; border:1px solid var(--line); border-radius:8px; }
+  .additem button{ padding:9px 14px; font-size:14px; font-weight:600; background:var(--teal); color:#fff; border:none; border-radius:8px; cursor:pointer; }
+
+  .day{ background:var(--card); border:1px solid var(--line); border-radius:12px; margin:12px 0; overflow:hidden; }
+  .day-head{ padding:12px 15px; font-weight:700; font-size:14px; background:var(--teal-soft); color:var(--teal); display:flex; justify-content:space-between; }
+  .day-item{ padding:9px 15px; font-size:13.5px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; gap:10px; }
+  .day-item:last-child{ border-bottom:none; }
+  .day-item .st{ font-size:11px; color:var(--muted); flex:none; }
+  .empty{ text-align:center; color:var(--muted); padding:40px 20px; font-size:14px; }
+
+  .addstore{ display:none; width:100%; padding:13px; margin:6px 0 2px; font-size:14px; font-weight:600;
+    border:1.5px dashed var(--teal); color:var(--teal); background:var(--teal-soft); border-radius:12px; cursor:pointer; }
+  body.editing .addstore{ display:block; }
+
+  .toolbar{ display:flex; gap:8px; margin:14px 0 4px; }
+  .btn{ flex:1; padding:12px; font-size:13px; font-weight:600; border-radius:12px;
+    border:1px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer; transition:.12s; }
+  .btn:active{ transform:scale(.985); }
+  .btn.primary{ background:var(--brand); color:#fff; border-color:var(--brand); box-shadow:0 4px 14px rgba(46,93,75,.22); }
+  .btn.gold{ background:var(--gold); color:#fff; border-color:var(--gold); box-shadow:0 4px 14px rgba(180,137,76,.25); }
+  .btn.warn{ color:#b91c1c; border-color:#f0c9c9; background:#fef2f2; }
+  .hidden{ display:none; }
+  .footnote{ text-align:center; font-size:11px; color:var(--muted); margin-top:18px; padding:0 10px; }
+
+  /* Meal plan */
+  .daypills{ display:flex; gap:6px; overflow-x:auto; padding:4px 0 10px; -webkit-overflow-scrolling:touch; }
+  .daypill{ flex:none; min-width:46px; text-align:center; padding:9px 10px; border-radius:10px; background:var(--card); border:1px solid var(--line); font-size:13px; font-weight:700; color:var(--muted); cursor:pointer; }
+  .daypill.active{ background:var(--teal); color:#fff; border-color:var(--teal); }
+  .daypill.today:not(.active){ border-color:var(--teal); color:var(--teal); }
+  .plan-head{ font-size:17px; font-weight:700; margin:4px 2px 10px; }
+  .plan-head .totals{ display:block; font-size:11.5px; font-weight:600; color:var(--muted); margin-top:3px; }
+  .timeline{ background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+  .tl-item{ display:flex; gap:11px; padding:12px 13px; border-bottom:1px solid var(--line); }
+  .tl-item:last-child{ border-bottom:none; }
+  .tl-time{ flex:none; width:44px; font-size:12px; font-weight:700; color:var(--teal); padding-top:2px; }
+  .tl-body{ flex:1; min-width:0; }
+  .tl-slot{ font-size:13.5px; font-weight:700; margin-bottom:5px; }
+  .tl-both{ font-size:12.5px; color:var(--muted); }
+  .tl-split{ display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+  .tl-p{ font-size:11.5px; line-height:1.35; color:var(--ink); background:var(--bg); border-radius:8px; padding:7px 8px; }
+  .who{ display:block; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.4px; margin-bottom:3px; }
+  .who.a{ color:#0f766e; } .who.v{ color:#b45309; }
+  .everyday, .glance-wrap{ background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin-top:12px; }
+  .ed-title{ font-size:13px; font-weight:800; margin-bottom:8px; }
+  .ed-item{ font-size:12.5px; color:var(--muted); padding:3px 0; }
+  .gl-row{ display:grid; grid-template-columns:36px 1fr 1fr; gap:8px; align-items:center; padding:9px 0; border-top:1px solid var(--line); font-size:11.5px; cursor:pointer; }
+  .gl-row:first-child{ border-top:none; }
+  .gl-row.today{ background:var(--teal-soft); margin:0 -14px; padding-left:14px; padding-right:14px; }
+  .gl-day{ font-weight:800; color:var(--teal); }
+  .gl-meal{ color:var(--ink); }
+  .legend{ font-size:11px; color:var(--muted); margin-top:10px; line-height:1.4; }
+  .dish{ color:var(--teal); font-weight:700; text-decoration:underline; text-decoration-style:dotted; text-underline-offset:2px; cursor:pointer; }
+
+  /* Glance v2 */
+  .gl2{ padding:8px 0 2px; border-top:1px solid var(--line); cursor:pointer; }
+  .gl2:first-child{ border-top:none; }
+  .gl2.today{ background:var(--teal-soft); margin:0 -14px; padding:8px 14px; }
+  .gl2-day{ font-size:12px; font-weight:800; color:var(--teal); margin-bottom:3px; }
+  .gl2-day .now{ font-size:10px; background:var(--teal); color:#fff; padding:1px 6px; border-radius:10px; margin-left:6px; }
+  .gl2-line{ font-size:12px; color:var(--ink); padding:2px 0; }
+  .gl2-line b{ color:var(--muted); font-weight:700; }
+
+  /* Recipe modal */
+  .rc-overlay{ display:none; position:fixed; inset:0; background:rgba(20,28,40,.5); z-index:50; align-items:flex-end; justify-content:center; }
+  .rc-overlay.show{ display:flex; }
+  .rc-card{ background:var(--card); width:100%; max-width:560px; max-height:88vh; overflow-y:auto; border-radius:16px 16px 0 0; padding:0 18px 28px; }
+  @media(min-width:560px){ .rc-overlay{ align-items:center; } .rc-card{ border-radius:16px; } }
+  .rc-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; position:sticky; top:0; background:var(--card); padding:16px 0 10px; border-bottom:1px solid var(--line); }
+  .rc-title{ font-size:17px; font-weight:800; }
+  .rc-sub{ font-size:12px; color:var(--teal); font-weight:700; margin-top:3px; }
+  .rc-x{ flex:none; border:none; background:var(--bg); width:32px; height:32px; border-radius:50%; font-size:14px; cursor:pointer; color:var(--muted); }
+  .rc-note{ font-size:12.5px; color:var(--ink); background:var(--teal-soft); border-radius:8px; padding:9px 11px; margin:12px 0 4px; }
+  .rc-h{ font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin:14px 0 6px; }
+  .rc-ing{ margin:0; padding-left:18px; } .rc-ing li{ font-size:13px; margin:4px 0; line-height:1.35; }
+  .rc-meth{ margin:0; padding-left:20px; } .rc-meth li{ font-size:13px; margin:7px 0; line-height:1.45; }
+
+  /* Prep tab */
+  .prep-intro{ font-size:12.5px; color:var(--muted); margin:4px 2px 4px; line-height:1.5; }
+  .prep-card{ background:var(--card); border:1px solid var(--line); border-radius:12px; margin:12px 0; overflow:hidden; }
+  .prep-head{ padding:12px 14px; font-weight:800; font-size:14px; background:var(--teal-soft); color:var(--teal); }
+  .prep-row{ padding:11px 14px; border-top:1px solid var(--line); font-size:13px; line-height:1.4; }
+  .prep-row:first-child{ border-top:none; }
+  .pr-t{ font-weight:700; }
+  .pr-d{ font-size:12px; color:var(--muted); margin-top:2px; }
+  .pr-time{ float:right; font-size:11px; color:var(--muted); font-weight:700; margin-left:8px; }
+  .step-num{ display:inline-flex; width:20px; height:20px; border-radius:50%; background:var(--teal); color:#fff; font-size:11px; font-weight:800; align-items:center; justify-content:center; margin-right:9px; vertical-align:middle; }
+  .rc-link{ font-size:11.5px; color:var(--teal); font-weight:700; margin-top:3px; cursor:pointer; }
+  .btn.coles{ background:#e01a22; color:#fff; border-color:#e01a22; }
+  .coles-item{ display:flex; justify-content:space-between; align-items:center; gap:10px; padding:11px 12px; border:1px solid var(--line); border-radius:9px; margin:7px 0; font-size:13.5px; font-weight:600; color:var(--ink); text-decoration:none; }
+  .coles-item:active{ background:var(--bg); }
+  .coles-go{ font-size:12px; color:#e01a22; font-weight:800; flex:none; }
+  .coles-copy{ width:100%; margin:2px 0 10px; }
+  .pin-in{ width:100%; text-align:center; font-size:26px; letter-spacing:8px; padding:12px; border:1.5px solid var(--line); border-radius:10px; font-weight:700; }
+  .pin-in:focus{ outline:none; border-color:var(--teal); }
+  .pin-err{ font-size:12.5px; color:#b91c1c; text-align:center; min-height:16px; margin-top:8px; font-weight:600; }
+  .searchbar{ display:flex; align-items:center; gap:9px; background:var(--card); border:1px solid var(--line); border-radius:11px; padding:10px 13px; margin:12px auto 12px; max-width:692px; width:calc(100% - 28px); }
+  .searchbar .s-ico{ font-size:14px; opacity:.55; }
+  .searchbar input{ flex:1; border:none; outline:none; font-size:15px; background:transparent; color:var(--ink); }
+  .searchbar .s-clr{ color:var(--muted); font-size:14px; cursor:pointer; display:none; padding:2px 4px; }
+  .searchbar.has .s-clr{ display:block; }
+  mark{ background:#fde68a; color:inherit; border-radius:3px; padding:0 1px; }
+  .ask-in{ width:100%; font-size:16px; padding:11px 12px; border:1.5px solid var(--line); border-radius:10px; }
+  .ask-in:focus{ outline:none; border-color:var(--teal); }
+  .ask-msg{ font-size:13.5px; color:var(--muted); line-height:1.45; }
+  .ask-msg.ok{ color:var(--teal); }
+  .btn.submit{ background:#0f766e; color:#fff; border-color:#0f766e; font-size:15px; padding:13px; }
+  .cost-sum{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin:12px 0; }
+  .cs-box{ background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 6px; text-align:center; }
+  .cs-l{ display:block; font-size:10px; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); font-weight:700; }
+  .cs-v{ display:block; font-size:15px; font-weight:800; margin-top:3px; }
+  .cs-v.lo{ color:#0f766e; } .cs-v.hi{ color:#b91c1c; }
+  .sub-cost{ font-size:15px; font-weight:800; color:var(--teal); cursor:pointer; }
+  .sub-cost.none{ font-size:12px; font-weight:700; color:var(--muted); }
+  .sub-meta{ font-size:11px; color:var(--muted); padding:8px 15px 4px; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  .photo-wrap{ display:flex; align-items:center; gap:8px; }
+  .photo-act{ font-size:12px; font-weight:700; color:var(--teal); cursor:pointer; }
+  .photo-act.add{ color:#b45309; }
+  .bill-thumb{ width:40px; height:40px; object-fit:cover; border-radius:7px; border:1px solid var(--line); cursor:pointer; }
+  .photo-full{ max-width:94%; max-height:90vh; border-radius:12px; box-shadow:0 8px 40px rgba(0,0,0,.4); }
+  #photoModal.show{ display:flex; }
+
+  /* ===== Premium auth polish ===== */
+  .auth-gate{ background:linear-gradient(165deg,#356a54 0%,#2e5d4b 55%,#22493a 100%); }
+  .auth-card{ border-radius:22px; padding:30px 24px; box-shadow:0 24px 70px rgba(0,0,0,.32); }
+  .auth-logo{ font-size:0; margin-bottom:6px; }
+  .auth-logo .mk{ display:inline-flex; align-items:center; justify-content:center; width:54px; height:54px; border-radius:16px; background:var(--teal-soft); font-size:26px; }
+  .auth-card h2{ font-family:var(--serif); font-weight:600; font-size:24px; letter-spacing:-.4px; }
+  .btn.primary, .auth-in, .btn{ font-family:inherit; }
+
+  /* ===== Onboarding & paywall overlays ===== */
+  .ob{ position:fixed; inset:0; z-index:120; background:var(--bg); display:none; flex-direction:column; }
+  .ob.show{ display:flex; }
+  .ob-top{ padding:16px 20px 6px; }
+  .ob-prog{ height:5px; background:var(--line); border-radius:6px; overflow:hidden; }
+  .ob-prog i{ display:block; height:100%; width:0; background:var(--brand); border-radius:6px; transition:width .35s ease; }
+  .ob-step-c{ font-size:11px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; color:var(--muted); margin-top:10px; }
+  .ob-body{ flex:1; overflow-y:auto; padding:6px 20px 20px; max-width:560px; margin:0 auto; width:100%; }
+  .ob-h{ font-family:var(--serif); font-weight:600; font-size:26px; letter-spacing:-.4px; margin:10px 0 6px; line-height:1.15; }
+  .ob-sub{ font-size:14px; color:var(--muted); margin:0 0 18px; line-height:1.5; }
+  .ob-label{ font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin:18px 0 9px; }
+  .chips{ display:flex; flex-wrap:wrap; gap:8px; }
+  .chip{ padding:10px 15px; border-radius:30px; border:1.5px solid var(--line); background:var(--card); font-size:13.5px; font-weight:600; color:var(--ink); cursor:pointer; user-select:none; transition:.12s; }
+  .chip:active{ transform:scale(.96); }
+  .chip.on{ background:var(--brand); color:#fff; border-color:var(--brand); box-shadow:0 4px 12px rgba(46,93,75,.2); }
+  .chip.add{ border-style:dashed; color:var(--brand); }
+  .ob-in{ width:100%; padding:13px 14px; font-size:16px; border:1.5px solid var(--line); border-radius:12px; background:var(--card); color:var(--ink); font-family:inherit; }
+  .ob-in:focus{ outline:none; border-color:var(--brand); }
+  .stepper{ display:flex; align-items:center; gap:16px; }
+  .stepper button{ width:44px; height:44px; border-radius:12px; border:1.5px solid var(--line); background:var(--card); font-size:22px; font-weight:700; color:var(--brand); cursor:pointer; }
+  .stepper .val{ font-size:22px; font-weight:800; min-width:28px; text-align:center; }
+  .stepper .lbl{ flex:1; font-size:14px; font-weight:600; }
+  .ob-foot{ padding:12px 20px calc(16px + env(safe-area-inset-bottom)); border-top:1px solid var(--line); background:var(--card); display:flex; gap:10px; max-width:560px; margin:0 auto; width:100%; }
+  .ob-foot .btn{ padding:15px; font-size:15px; border-radius:14px; }
+  .ob-gen{ text-align:center; padding:40px 10px; }
+  .ob-gen .spin{ width:46px; height:46px; border:4px solid var(--line); border-top-color:var(--brand); border-radius:50%; margin:0 auto 18px; animation:spin 1s linear infinite; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+
+  .paywall{ position:fixed; inset:0; z-index:130; background:linear-gradient(165deg,#356a54,#22493a); display:none; align-items:center; justify-content:center; padding:20px; }
+  .paywall.show{ display:flex; }
+  .pw-card{ background:var(--card); border-radius:24px; width:100%; max-width:400px; padding:28px 24px; text-align:center; box-shadow:0 24px 70px rgba(0,0,0,.34); max-height:92vh; overflow-y:auto; }
+  .pw-badge{ display:inline-block; font-size:11px; font-weight:800; letter-spacing:.6px; text-transform:uppercase; color:var(--gold); background:#f7efe1; padding:5px 12px; border-radius:20px; }
+  .pw-card h2{ font-family:var(--serif); font-weight:600; font-size:25px; letter-spacing:-.4px; margin:14px 0 4px; }
+  .pw-price{ font-family:var(--serif); font-size:34px; font-weight:600; margin:8px 0 2px; }
+  .pw-price span{ font-family:"Inter"; font-size:14px; font-weight:600; color:var(--muted); }
+  .pw-sub{ font-size:13.5px; color:var(--muted); margin:2px 0 16px; }
+  .pw-feats{ text-align:left; margin:8px 0 20px; }
+  .pw-feat{ display:flex; gap:11px; align-items:flex-start; font-size:13.5px; padding:7px 0; }
+  .pw-feat .ck{ flex:none; width:20px; height:20px; border-radius:50%; background:var(--teal-soft); color:var(--brand); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; margin-top:1px; }
+  .pw-note{ font-size:11.5px; color:var(--muted); margin-top:14px; line-height:1.5; }
+  .pw-x{ position:absolute; }
+  .pw-manage{ font-size:12.5px; color:var(--muted); margin-top:12px; cursor:pointer; text-decoration:underline; }
+  .settings-link{ font-size:12.5px; color:var(--brand); font-weight:700; cursor:pointer; }
+
+  /* ===== Welcome / landing ===== */
+  .welcome{ position:fixed; inset:0; z-index:110; background:var(--bg); display:none; flex-direction:column; overflow:hidden; }
+  .welcome.show{ display:flex; }
+  .wc-top{ flex:1; display:flex; flex-direction:column; justify-content:center; padding:30px 26px 10px; max-width:520px; margin:0 auto; width:100%; }
+  .wc-logo{ display:flex; align-items:center; gap:12px; margin-bottom:22px; }
+  .wc-logo .mk{ width:52px; height:52px; border-radius:15px; background:linear-gradient(160deg,#356a54,#2e5d4b); color:#fff; display:flex; align-items:center; justify-content:center; font-size:26px; box-shadow:0 8px 22px rgba(46,93,75,.28); }
+  .wc-logo .nm{ font-family:var(--serif); font-weight:600; font-size:30px; letter-spacing:-.5px; }
+  .wc-feat{ display:flex; align-items:center; gap:13px; font-family:var(--serif); font-size:27px; font-weight:600; letter-spacing:-.3px; margin:7px 0; }
+  .wc-feat .ck{ width:30px; height:30px; border-radius:50%; border:2.5px solid var(--brand); color:var(--brand); display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:800; flex:none; }
+  .wc-all{ font-size:15px; color:var(--muted); margin:10px 2px 24px; }
+  .wc-cta{ display:block; width:100%; padding:17px; font-size:16px; font-weight:700; color:#fff; background:var(--brand); border:none; border-radius:16px; cursor:pointer; box-shadow:0 8px 22px rgba(46,93,75,.28); }
+  .wc-login{ text-align:center; font-size:14.5px; color:var(--muted); margin-top:18px; }
+  .wc-login b{ color:var(--brand); cursor:pointer; }
+  .wc-strip{ display:grid; grid-template-columns:repeat(4,1fr); gap:6px; padding:6px; }
+  .wc-tile{ aspect-ratio:1; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:34px; }
+  .wc-tile:nth-child(1){ background:#e7f0eb;} .wc-tile:nth-child(2){ background:#f5ecdc;} .wc-tile:nth-child(3){ background:#eae6df;} .wc-tile:nth-child(4){ background:#e7f0eb;}
+  .wc-tile:nth-child(5){ background:#f5ecdc;} .wc-tile:nth-child(6){ background:#e7f0eb;} .wc-tile:nth-child(7){ background:#eae6df;} .wc-tile:nth-child(8){ background:#f5ecdc;}
+
+  /* ===== Two-tier subscription ===== */
+  .pw-plans{ display:flex; gap:11px; margin:6px 0 16px; }
+  .pw-plan{ flex:1; border:2px solid var(--line); border-radius:18px; padding:16px 10px 14px; cursor:pointer; text-align:center; position:relative; background:var(--card); transition:.15s; }
+  .pw-plan.on{ border-color:var(--brand); background:var(--teal-soft); box-shadow:0 6px 18px rgba(46,93,75,.16); }
+  .pw-plan .save{ position:absolute; top:-11px; left:50%; transform:translateX(-50%); background:var(--gold); color:#fff; font-size:10px; font-weight:800; letter-spacing:.4px; padding:4px 10px; border-radius:20px; white-space:nowrap; }
+  .pw-plan .pl{ font-size:14px; font-weight:700; color:var(--muted); margin-bottom:3px; }
+  .pw-plan.on .pl{ color:var(--brand); }
+  .pw-plan .amt{ font-family:var(--serif); font-size:26px; font-weight:600; letter-spacing:-.5px; }
+  .pw-plan .per{ font-size:12px; color:var(--muted); margin-top:2px; }
+  .pw-links{ display:flex; flex-wrap:wrap; justify-content:center; gap:6px 14px; margin:16px 0 6px; }
+  .pw-links a,.pw-links span{ font-size:12.5px; color:var(--muted); text-decoration:underline; cursor:pointer; }
+  .pw-social{ margin-top:20px; padding-top:16px; border-top:1px solid var(--line); }
+  .pw-social h3{ font-family:var(--serif); font-weight:600; font-size:18px; margin:0 0 10px; }
+  .pw-review{ background:var(--bg); border-radius:14px; padding:14px 15px; text-align:left; }
+  .pw-stars{ color:var(--gold); font-size:15px; letter-spacing:2px; margin-bottom:7px; }
+  .pw-review p{ margin:0; font-size:13px; line-height:1.5; }
+  .pw-review .who{ display:block; text-transform:none; letter-spacing:0; font-weight:700; color:var(--muted); margin-top:8px; font-size:12px; }
+</style>
+</head>
+<body>
+<div class="topbar">
+<header>
+  <div class="titlerow">
+    <div class="brandmark"><span class="mark">🌿</span><h1>Larder</h1></div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span class="sync" id="sync">…</span>
+      <button id="acctBtn" class="acct-btn" onclick="openAcct()" style="display:none" title="Account">👤</button>
+    </div>
+  </div>
+  <div class="sub" id="sub">Your week, planned &amp; provisioned</div>
+  <div class="progwrap">
+    <div class="progbar"><div class="progfill" id="progfill"></div></div>
+    <div class="progtext" id="progtext">0 of 0 done</div>
+  </div>
+</header>
+<div class="trialbar" id="trialbar">
+  <span id="trialText">Free trial</span>
+  <button onclick="openPaywall()">Upgrade</button>
+</div>
+
+<div class="tabs">
+  <div class="tab active" id="tab-list" onclick="showTab('list')">Shop</div>
+  <div class="tab" id="tab-plan" onclick="showTab('plan')">Meals</div>
+  <div class="tab" id="tab-prep" onclick="showTab('prep')">Prep</div>
+  <div class="tab" id="tab-log" onclick="showTab('log')">Log</div>
+</div>
+
+<div class="searchbar" id="searchbar">
+  <span class="s-ico">🔎</span>
+  <input id="search" type="search" autocomplete="off" placeholder="Search items…" oninput="doSearch(this.value)">
+  <span class="s-clr" id="sClr" onclick="clearSearch()">✕</span>
+</div>
+</div><!-- /topbar -->
+
+<main>
+  <div id="view-list"></div>
+  <button class="addstore" onclick="addStore()">＋ Add section</button>
+  <div id="view-plan" class="hidden"></div>
+  <div id="view-prep" class="hidden"></div>
+  <div id="view-log" class="hidden"></div>
+
+  <div class="toolbar">
+    <button class="btn submit" onclick="submitList()">✅ Submit shop</button>
+  </div>
+  <div class="toolbar">
+    <button class="btn coles" onclick="openColes()">🛒 Send list to Coles</button>
+  </div>
+  <div class="toolbar">
+    <button class="btn primary" id="editBtn" onclick="toggleEdit()">✏️ Edit list</button>
+    <button class="btn" onclick="collapseAll()">Collapse all</button>
+  </div>
+  <div class="toolbar">
+    <button class="btn warn" onclick="resetAll()">Reset all ticks</button>
+  </div>
+  <div class="footnote">In Edit mode you can add/delete items and sections, rename by tapping the text, and remove sections with 🗑. On iPad: Safari → Share → Add to Home Screen.</div>
+</main>
+
+<div id="recipeModal" class="rc-overlay" onclick="if(event.target===this)closeRecipe()">
+  <div class="rc-card">
+    <div class="rc-top">
+      <div><div class="rc-title"></div><div class="rc-sub"></div></div>
+      <button class="rc-x" onclick="closeRecipe()">✕</button>
+    </div>
+    <div class="rc-body"></div>
+  </div>
+</div>
+
+<div id="colesModal" class="rc-overlay" onclick="if(event.target===this)closeColes()">
+  <div class="rc-card">
+    <div class="rc-top">
+      <div><div class="rc-title">Shop at Coles</div><div class="rc-sub"></div></div>
+      <button class="rc-x" onclick="closeColes()">✕</button>
+    </div>
+    <div class="rc-body"></div>
+  </div>
+</div>
+
+<div id="pinModal" class="rc-overlay" onclick="if(event.target===this)closePin()">
+  <div class="rc-card" style="max-width:340px">
+    <div class="rc-top"><div class="rc-title">Enter code to edit</div><button class="rc-x" onclick="closePin()">✕</button></div>
+    <div class="rc-body">
+      <input id="pinInput" type="tel" inputmode="numeric" maxlength="8" placeholder="••••" class="pin-in" onkeydown="if(event.key==='Enter')submitPin()">
+      <div id="pinErr" class="pin-err"></div>
+      <button class="btn primary" style="width:100%;margin-top:12px" onclick="submitPin()">Unlock editing</button>
+    </div>
+  </div>
+</div>
+
+<div id="welcome" class="welcome">
+  <div class="wc-top">
+    <div class="wc-logo"><span class="mk">🌿</span><span class="nm">Larder</span></div>
+    <div class="wc-feat"><span class="ck">✓</span> Plan</div>
+    <div class="wc-feat"><span class="ck">✓</span> Shop</div>
+    <div class="wc-feat"><span class="ck">✓</span> Cook</div>
+    <div class="wc-feat"><span class="ck">✓</span> Track</div>
+    <div class="wc-all">Your whole week of food — personalised, in one place.</div>
+    <button class="wc-cta" onclick="goAuth('signup')">Get started</button>
+    <div class="wc-login" style="margin-top:12px">Already have a meal plan? <b onclick="goImport()">Upload it instead</b></div>
+    <div class="wc-login" style="margin-top:8px">Already have an account? <b onclick="goAuth('login')">Login</b></div>
+  </div>
+  <div class="wc-strip">
+    <div class="wc-tile">🥗</div><div class="wc-tile">🍜</div><div class="wc-tile">🍲</div><div class="wc-tile">🥘</div>
+    <div class="wc-tile">🍳</div><div class="wc-tile">🫐</div><div class="wc-tile">🥑</div><div class="wc-tile">🍛</div>
+  </div>
+</div>
+
+<div id="authGate" class="auth-gate">
+  <div class="auth-card">
+    <div class="auth-logo"><span class="mk">🌿</span></div>
+    <h2 id="authTitle">Create your account</h2>
+    <p class="auth-sub" id="authSub">Save your plan and sync it across every device.</p>
+    <input id="authFirst" type="text" autocomplete="given-name" placeholder="First name" class="auth-in">
+    <input id="authEmail" type="email" autocomplete="email" placeholder="Email" class="auth-in">
+    <input id="authPass" type="password" autocomplete="current-password" placeholder="Password" class="auth-in" onkeydown="if(event.key==='Enter')doAuthPrimary()">
+    <button class="btn primary" id="authCta" style="width:100%;padding:14px;font-size:15px" onclick="doAuthPrimary()">Create account</button>
+    <div class="auth-or">Or</div>
+    <button class="btn google-btn" onclick="doGoogle()"><span class="g-icon">G</span> Continue with Google</button>
+    <div class="auth-hint"><span class="settings-link" id="authMagic" onclick="doMagic()">Email me a login link instead</span></div>
+    <div id="authMsg" class="auth-msg"></div>
+    <div class="auth-hint">By continuing you agree to Larder’s <a href="privacy.html" target="_blank" style="color:var(--muted)">Terms &amp; Privacy</a>.</div>
+    <div class="wc-login" style="margin-top:14px"><span id="authSwap"></span></div>
+  </div>
+</div>
+
+<div id="acctModal" class="rc-overlay" onclick="if(event.target===this)closeAcct()">
+  <div class="rc-card" style="max-width:380px">
+    <div class="rc-top"><div class="rc-title">Account</div><button class="rc-x" onclick="closeAcct()">✕</button></div>
+    <div class="rc-body">
+      <div class="acct-email">Signed in as <b id="acctEmail"></b></div>
+      <div id="acctSubLine" class="ask-msg" style="margin:6px 0 2px"></div>
+      <button class="btn primary" style="width:100%;margin-top:10px" onclick="editPrefs()">🍽 Edit my preferences &amp; regenerate plan</button>
+      <button class="btn" style="width:100%;margin-top:8px" onclick="openPaywall()">💳 Manage subscription</button>
+      <div class="rc-h">Share this list</div>
+      <div class="ask-msg">Give this code to your partner so you both use the same list.</div>
+      <div class="share-row"><input id="shareCode" class="ask-in" readonly><button class="btn" id="copyShareBtn" onclick="copyShare()">Copy</button></div>
+      <div class="rc-h">Invite by email</div>
+      <div class="ask-msg">Enter a partner or housemate's email — they'll join this list automatically when they sign in with it.</div>
+      <input id="inviteEmail" class="ask-in" type="email" placeholder="their@email.com">
+      <button class="btn primary" style="width:100%;margin-top:8px" onclick="inviteByEmail()">Send invite</button>
+      <div id="inviteMsg" class="ask-msg"></div>
+      <div class="rc-h">Join a shared list</div>
+      <input id="joinCode" class="ask-in" placeholder="Paste a share code">
+      <button class="btn primary" style="width:100%;margin-top:8px" onclick="joinList()">Join list</button>
+      <div id="joinMsg" class="ask-msg"></div>
+      <button class="btn warn" style="width:100%;margin-top:18px" onclick="signOut()">Sign out</button>
+    </div>
+  </div>
+</div>
+
+<input id="billPhoto" type="file" accept="image/*" style="display:none" onchange="onBillPhoto(this)">
+<input id="planFile" type="file" accept="image/*,application/pdf,.pdf,.docx" style="display:none" onchange="onPlanFile(this)">
+
+<div id="importModal" class="rc-overlay" onclick="if(event.target===this)closeImport()">
+  <div class="rc-card" style="max-width:420px">
+    <div class="rc-top"><div class="rc-title">Import a meal plan</div><button class="rc-x" onclick="closeImport()">✕</button></div>
+    <div class="rc-body">
+      <div class="ask-msg">Upload a photo, PDF or Word doc of a meal plan — or paste it as text. It gets read into a day-by-day plan, recipes, and a shopping list. This replaces the current plan.</div>
+      <button class="btn primary" style="width:100%;margin:12px 0 4px" onclick="document.getElementById('planFile').click()">📎 Choose photo, PDF or Word file</button>
+      <div class="auth-or">— or —</div>
+      <textarea id="planText" class="ask-in" style="height:120px;font-family:inherit;resize:vertical" placeholder="Paste your meal plan here…"></textarea>
+      <button class="btn primary" style="width:100%;margin-top:8px" onclick="importFromText()">Import from text</button>
+      <div id="importMsg" class="auth-msg"></div>
+    </div>
+  </div>
+</div>
+<div id="photoModal" class="rc-overlay" onclick="closePhoto()"><img class="photo-full" alt="bill"></div>
+
+<div id="askModal" class="rc-overlay" onclick="if(event.target===this)askCancel()">
+  <div class="rc-card" style="max-width:360px">
+    <div class="rc-top"><div class="rc-title" id="askTitle"></div><button class="rc-x" onclick="askCancel()">✕</button></div>
+    <div class="rc-body">
+      <input id="askInput" class="ask-in" placeholder="">
+      <div id="askMsg" class="ask-msg"></div>
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button class="btn" style="flex:1" onclick="askCancel()">Cancel</button>
+        <button class="btn primary" style="flex:1" id="askOk">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="obGate" class="ob">
+  <div class="ob-top">
+    <div class="ob-prog"><i id="obProg"></i></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <div class="ob-step-c" id="obStepC"></div>
+      <div style="display:flex;gap:16px;align-items:center">
+        <span class="settings-link" onclick="goImport()">📎 Upload a plan</span>
+        <span class="settings-link" onclick="obSkip()">Skip →</span>
+      </div>
+    </div>
+  </div>
+  <div class="ob-body" id="obBody"></div>
+  <div class="ob-foot" id="obFoot"></div>
+</div>
+
+<div id="paywall" class="paywall">
+  <div class="pw-card">
+    <span class="pw-badge">Larder Premium</span>
+    <h2 id="pwTitle">Start your free trial</h2>
+    <div class="pw-sub" id="pwSub">Everything you need to plan, shop &amp; cook the week.</div>
+    <div class="pw-plans" id="pwPlans"></div>
+    <button class="btn gold" style="width:100%;padding:16px;font-size:15px" id="pwCta" onclick="startCheckout()">Start free trial</button>
+    <div class="pw-note" id="pwNote" style="margin-top:10px"></div>
+    <div class="pw-links">
+      <span onclick="refreshSub()">Restore</span>
+      <a href="mailto:claudevj657@gmail.com">Contact us</a>
+      <a href="privacy.html" target="_blank">Terms</a>
+      <a href="privacy.html" target="_blank">Privacy</a>
+    </div>
+    <div class="pw-social">
+      <h3>Join thousands of happy cooks</h3>
+      <div class="pw-review">
+        <div class="pw-stars">★★★★★</div>
+        <p>This has changed how we eat. The plan fits our diet perfectly and the grocery list is sorted by exactly the shops we go to. My partner loves sharing it.</p>
+        <span class="who">— Priya &amp; Sam</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+/* ==== CONFIG: Supabase cloud sync ==== */
+const SUPA_URL = "https://utcsxenvsnuywojtonll.supabase.co";
+const SUPA_KEY = "sb_publishable_EIU5NMbeUTy0mdhUQLP3Ug_jGTPiMki";
+const EDIT_CODE = "2580";  // code required to unlock Edit mode
+/* ===================================== */
+
+/* ---- Build environment: TEST (/test/ path) vs PROD (root) ---- */
+const TEST_ENV = /(^|\/)test(\/|$)/.test(location.pathname);
+const ENV_SUFFIX = TEST_ENV ? "_test" : "";
+const K_ACTIVE = "activeList" + ENV_SUFFIX;
+const K_FIRST  = "larder_first" + ENV_SUFFIX;
+const LKEY = "grocery_checklist_v3" + ENV_SUFFIX;
+let editing = false, pushTimer = null, pulling = false;
+
+const SEED = { updatedAt:0, submissions:[], stores:[
+  { id:"g", name:"🏪 Indian Grocery", collapsed:false, items:[
+    it("Ginger turmeric"), it("Low-fat paneer","~1.2kg · 4 of 5 dishes + burrito bowls"),
+    it("Fresh turmeric + black pepper"),
+    it("Spices bundle","shahi paneer masala, egg-curry masala, garam masala, Kashmiri chilli, coriander seeds, cumin, turmeric, mustard & fennel powder, methi"),
+    it("Cumin seeds","jeera water"), it("Saffron strands"),
+    it("Chaat masala","for mint chutney"), it("Black salt (kala namak)","for mint chutney") ]},
+  { id:"c", name:"📦 Costco", collapsed:false, items:[
+    it("Eggs — 1 dozen","Egg Curry"), it("Whey or plant protein powder","vanilla"),
+    it("Collagen powder"), it("Black beans / rajma","canned"), it("Sweetcorn","canned/frozen"),
+    it("Red onion"), it("Onions — ~1.5kg","regular/brown"), it("Coffee"), it("Multivitamins") ]},
+  { id:"w", name:"🛒 Woolworths / Coles", collapsed:false, items:[
+    it("Low-fat Greek yogurt","large tub ~2kg · smoothies, burrito bowls, achari marinade"),
+    it("Fat-free / skim milk","~3L · incl. 200ml for Shahi Paneer"), it("Taco / burrito seasoning"),
+    it("Tofu","optional · paneer sub"), it("Mixed berries","fresh or frozen, ~1.5kg"),
+    it("Capsicum — ~8","Kadhai / Chilli Paneer / Achari"), it("Tomatoes — ~1.5kg"),
+    it("Cucumber — ~3"), it("Carrots","small"), it("Jalapeños"), it("Ginger, garlic, green chilli"),
+    it("Fresh coriander, mint"), it("Lemons & limes"), it("Red rice"),
+    it("Low-sodium / dark soy sauce"), it("Green chilli sauce"), it("Ketchup"), it("Cornflour"),
+    it("Almonds, walnuts, mixed nuts"), it("Coconut water — 7+"), it("Stevia / sugar-free sweetener"),
+    it("Spray oil / cooking oil") ]},
+  { id:"e", name:"🧻 Essentials", collapsed:false, items:[
+    it("Tissue box (square)","Coles"), it("Toilet paper","Costco") ]},
+]};
+
+function uid(){ return Math.random().toString(36).slice(2,9); }
+function it(n,d){ return {id:uid(), n:n, d:d||"", done:false, ts:0}; }
+
+let data = load();
+function load(){ try{ const s=JSON.parse(localStorage.getItem(LKEY)); if(s&&s.stores){ if(!s.submissions) s.submissions=[]; return s; } }catch(e){} return JSON.parse(JSON.stringify(SEED)); }
+function saveLocal(){ data.updatedAt=Date.now(); localStorage.setItem(LKEY, JSON.stringify(data)); }
+
+const sb = window.supabase.createClient(SUPA_URL, SUPA_KEY, {auth:{persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, storageKey: TEST_ENV?'sb-larder-test':undefined}});
+let cloudOn = false, activeListId = null, session = null;
+function setSync(t,cls){ const e=document.getElementById('sync'); e.textContent=t; e.className='sync '+(cls||''); }
+function fmtDate(ts){ return new Date(ts).toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'}); }
+function fmtTime(ts){ return new Date(ts).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'}); }
+
+/* ---- per-user cloud sync (Supabase, RLS) ---- */
+function schedulePush(){ if(!cloudOn) return; clearTimeout(pushTimer); pushTimer=setTimeout(push, 600); }
+function adoptRemote(remote){
+  if(!remote || !remote.stores) return false;
+  if((remote.updatedAt||0) > (data.updatedAt||0)){
+    if(!remote.submissions) remote.submissions=[];
+    data = remote; localStorage.setItem(LKEY, JSON.stringify(data)); render(); return true;
+  }
+  return false;
+}
+async function push(){
+  if(!cloudOn || !activeListId) return;
+  try{ setSync('Syncing…');
+    if(!editing){
+      const {data:row} = await sb.from('lists').select('data').eq('id',activeListId).single();
+      const rem = row && row.data;
+      if(rem && rem.stores && (rem.updatedAt||0) > (data.updatedAt||0)){ adoptRemote(rem); setSync('Synced ✓'); return; }
+    }
+    const {error} = await sb.from('lists').update({data:data, updated_at:new Date().toISOString()}).eq('id',activeListId);
+    setSync(error?'Offline':'Synced ✓', error?'off':'');
+  }catch(e){ setSync('Offline','off'); }
+}
+async function pull(){
+  if(!cloudOn || !activeListId) return;
+  if(pulling || editing) return; pulling=true;
+  try{
+    const {data:row,error} = await sb.from('lists').select('data').eq('id',activeListId).single();
+    if(!error && row) adoptRemote(row.data);
+    setSync(error?'Offline':'Synced ✓', error?'off':'');
+  }catch(e){ setSync('Offline','off'); }
+  pulling=false;
+}
+
+/* ---- auth + list bootstrap ---- */
+async function afterLogin(){
+  document.getElementById('authGate').classList.remove('show');
+  document.getElementById('welcome').classList.remove('show');
+  document.getElementById('acctBtn').style.display='';
+  try{
+    // accept any pending email invites addressed to this account
+    let invitedListId=null;
+    try{
+      const {data:invs} = await sb.from('list_invites').select('id,list_id');
+      if(invs && invs.length){
+        for(const inv of invs){ await sb.from('list_access').insert({list_id:inv.list_id}); await sb.from('list_invites').delete().eq('id', inv.id); }
+        invitedListId = invs[0].list_id;
+      }
+    }catch(e){}
+    const {data:acc} = await sb.from('list_access').select('list_id');
+    let id=null;
+    if(invitedListId){ id=invitedListId; }
+    else if(acc && acc.length){
+      const saved=localStorage.getItem(K_ACTIVE);
+      id = (saved && acc.some(a=>a.list_id===saved)) ? saved : acc[0].list_id;
+    } else {
+      const seed=JSON.parse(JSON.stringify(SEED)); seed.updatedAt=Date.now();
+      id = crypto.randomUUID();
+      const {error} = await sb.from('lists').insert({id:id, data:seed});
+      if(error){ setSync('Offline','off'); return; }
+      await sb.from('list_access').insert({list_id:id});
+      data=seed; localStorage.setItem(LKEY, JSON.stringify(data));
+    }
+    activeListId=id; localStorage.setItem(K_ACTIVE, id); cloudOn=true;
+    await pull(); render();
+    if(!window._syncInt){ window._syncInt=setInterval(pull,5000); document.addEventListener('visibilitychange',()=>{ if(!document.hidden) pull(); }); }
+    await loadProfileAndGate();
+  }catch(e){ setSync('Offline','off'); }
+}
+function showLogin(){ cloudOn=false; activeListId=null;
+  const em=document.getElementById('authEmail'), pw=document.getElementById('authPass'), fn=document.getElementById('authFirst');
+  if(em) em.value=''; if(pw) pw.value=''; if(fn) fn.value=''; authMsg('');
+  document.getElementById('authGate').classList.remove('show');
+  document.getElementById('obGate').classList.remove('show');
+  document.getElementById('paywall').classList.remove('show');
+  document.getElementById('welcome').classList.add('show');
+  document.getElementById('acctBtn').style.display='none'; }
+let _authMode='signup';
+function setAuthMode(m){
+  _authMode=m;
+  document.getElementById('authFirst').style.display = m==='signup'?'block':'none';
+  document.getElementById('authTitle').textContent = m==='signup'?'Create your account':'Welcome back';
+  document.getElementById('authSub').textContent = m==='signup'?'Save your plan and sync it across every device.':'Log in to pick up right where you left off.';
+  document.getElementById('authCta').textContent = m==='signup'?'Create account':'Log in';
+  document.getElementById('authPass').setAttribute('autocomplete', m==='signup'?'new-password':'current-password');
+  document.getElementById('authSwap').innerHTML = m==='signup'?'Already have an account? <b onclick="setAuthMode(\'login\')">Login</b>':'New here? <b onclick="setAuthMode(\'signup\')">Create account</b>';
+  authMsg('');
+}
+function goAuth(m){ document.getElementById('welcome').classList.remove('show'); document.getElementById('authGate').classList.add('show'); setAuthMode(m||'signup'); }
+function doAuthPrimary(){ if(_authMode==='signup') doSignUp(); else doSignIn(); }
+function goImport(){
+  const w=document.getElementById('welcome'); if(w) w.classList.remove('show');
+  if(cloudOn && session){ if(canUseApp()){ openImport(); } else { selectedPlan='byo'; openPaywall(); } }
+  else { window._pendingImport=true; goAuth('signup'); }
+}
+
+/* auth actions */
+function authEmail(){ return (document.getElementById('authEmail').value||'').trim(); }
+function authMsg(t,ok){ const e=document.getElementById('authMsg'); e.textContent=t||''; e.className='auth-msg'+(ok?' ok':''); }
+function validEmail(e){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e); }
+async function doGoogle(){ authMsg('Redirecting to Google…',true); try{ const {error}=await sb.auth.signInWithOAuth({provider:'google', options:{redirectTo:location.href.split('#')[0]}}); if(error) authMsg(friendlyAuthError(error.message)); }catch(e){ authMsg(friendlyAuthError(e.message)); } }
+function friendlyAuthError(msg){
+  const m=(msg||'').toLowerCase();
+  if(m.includes('invalid login')||m.includes('invalid credentials')) return 'Wrong email or password.';
+  if(m.includes('email not confirmed')||m.includes('not confirmed')) return 'Please verify your email first — check your inbox (and spam) for the link.';
+  if(m.includes('already registered')||m.includes('already been registered')||m.includes('user already')) return 'That email already has an account — try signing in instead.';
+  if(m.includes('password should be at least')||m.includes('at least 6')) return 'Password must be at least 6 characters.';
+  if(m.includes('unable to validate email')||m.includes('invalid email')||m.includes('invalid format')) return 'That doesn’t look like a valid email address.';
+  if(m.includes('rate limit')||m.includes('too many')||m.includes('for security purposes')) return 'Too many attempts — please wait a minute and try again.';
+  if(m.includes('signups not allowed')||m.includes('disabled')) return 'Sign-ups are currently turned off.';
+  if(m.includes('network')||m.includes('failed to fetch')) return 'Network error — check your connection and try again.';
+  return msg ? (msg.charAt(0).toUpperCase()+msg.slice(1)) : 'Something went wrong. Please try again.';
+}
+async function doSignIn(){
+  const em=authEmail(), pw=document.getElementById('authPass').value;
+  if(!validEmail(em)){ authMsg('Enter a valid email address.'); return; }
+  if(!pw){ authMsg('Enter your password (or use the email login link below).'); return; }
+  authMsg('Signing in…',true);
+  try{ const {error}=await sb.auth.signInWithPassword({email:em,password:pw}); if(error) authMsg(friendlyAuthError(error.message)); }
+  catch(e){ authMsg(friendlyAuthError(e.message)); }
+}
+async function doSignUp(){
+  const em=authEmail(), pw=document.getElementById('authPass').value;
+  const fn=(document.getElementById('authFirst').value||'').trim();
+  if(fn) localStorage.setItem(K_FIRST, fn);
+  if(!validEmail(em)){ authMsg('Enter a valid email address.'); return; }
+  if(pw.length<6){ authMsg('Choose a password of at least 6 characters.'); return; }
+  authMsg('Creating account…',true);
+  try{
+    const {data:res,error}=await sb.auth.signUp({email:em,password:pw, options:{emailRedirectTo:location.href.split('#')[0]}});
+    if(error){ authMsg(friendlyAuthError(error.message)); return; }
+    if(res && res.user && (res.user.identities||[]).length===0){ authMsg('That email already has an account — try signing in.'); return; }
+    if(res && !res.session){ authMsg('Account created! Check your email (and spam) for a verification link, then come back and sign in.', true); }
+  }catch(e){ authMsg(friendlyAuthError(e.message)); }
+}
+async function doMagic(){
+  const em=authEmail();
+  if(!validEmail(em)){ authMsg('Enter a valid email address — no password needed for this.'); return; }
+  authMsg('Sending your login link…',true);
+  try{ const {error}=await sb.auth.signInWithOtp({email:em, options:{emailRedirectTo:location.href.split('#')[0], shouldCreateUser:true}});
+    authMsg(error?friendlyAuthError(error.message):'Sent! Check your email (and spam) for the login link — no password needed.', !error);
+  }catch(e){ authMsg(friendlyAuthError(e.message)); }
+}
+async function signOut(){ await sb.auth.signOut(); localStorage.removeItem(K_ACTIVE); closeAcct(); showLogin(); }
+
+/* account + sharing */
+function openAcct(){ document.getElementById('acctEmail').textContent = (session&&session.user)?session.user.email:''; document.getElementById('shareCode').value = activeListId||''; document.getElementById('joinCode').value=''; document.getElementById('joinMsg').textContent=''; document.getElementById('inviteEmail').value=''; document.getElementById('inviteMsg').textContent=''; document.getElementById('acctModal').classList.add('show'); }
+async function inviteByEmail(){
+  const em=(document.getElementById('inviteEmail').value||'').trim().toLowerCase();
+  const msg=document.getElementById('inviteMsg');
+  if(!validEmail(em)){ msg.className='ask-msg'; msg.textContent='Enter a valid email address.'; return; }
+  if(!activeListId){ msg.textContent='No active list to share.'; return; }
+  msg.className='ask-msg'; msg.textContent='Inviting…';
+  try{
+    const {error}=await sb.from('list_invites').insert({list_id:activeListId, email:em});
+    if(error){ msg.textContent='Could not invite: '+(error.message||''); return; }
+    msg.className='ask-msg ok'; msg.textContent='✓ Invited '+em+'. They join this list when they sign in with that email.';
+    document.getElementById('inviteEmail').value='';
+  }catch(e){ msg.textContent='Could not invite. Try again.'; }
+}
+function closeAcct(){ document.getElementById('acctModal').classList.remove('show'); }
+function copyShare(){ navigator.clipboard.writeText(activeListId||'').then(()=>{ const b=document.getElementById('copyShareBtn'); b.textContent='Copied ✓'; setTimeout(()=>b.textContent='Copy',1500); }); }
+async function joinList(){ const code=(document.getElementById('joinCode').value||'').trim(); const jm=document.getElementById('joinMsg'); if(!code) return; jm.textContent='Joining…';
+  const {error}=await sb.from('list_access').insert({list_id:code});
+  if(error && !/duplicate|already exists/i.test(error.message)){ jm.textContent='Could not join — check the code.'; return; }
+  const {data:row,error:e2}=await sb.from('lists').select('data').eq('id',code).single();
+  if(e2||!row){ jm.textContent='That code doesn’t match a list.'; return; }
+  activeListId=code; localStorage.setItem(K_ACTIVE,code); data=row.data||JSON.parse(JSON.stringify(SEED)); if(!data.submissions)data.submissions=[]; localStorage.setItem(LKEY,JSON.stringify(data)); render(); closeAcct(); setSync('Synced ✓');
+}
+
+/* bootstrap */
+sb.auth.getSession().then(({data:{session:s}})=>{ session=s; if(s) afterLogin(); else showLogin(); });
+sb.auth.onAuthStateChange((_e,s)=>{ session=s; if(s){ afterLogin(); } else { showLogin(); } });
+
+function render(){
+  const list=document.getElementById('view-list'); list.innerHTML='';
+  let total=0, done=0;
+  data.stores.forEach(store=>{
+    let sDone=0;
+    store.items.forEach(x=>{ total++; if(x.done){ done++; sDone++; } });
+    const shown = searchQ ? store.items.filter(x=>(x.n+' '+(x.d||'')).toLowerCase().includes(searchQ)) : store.items;
+    if(searchQ && shown.length===0) return;
+    const itemsHtml = shown.map(x=>{
+      return `<div class="item ${x.done?'done':''}">
+        <div class="box" onclick="toggle('${store.id}','${x.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+        <div class="txt" onclick="editing?renameItem('${store.id}','${x.id}'):toggle('${store.id}','${x.id}')">
+          <div class="name">${hl(x.n)}</div>
+          ${x.d?`<div class="note">${hl(x.d)}</div>`:''}
+          ${x.done?`<div class="stamp">✓ Ordered ${fmtDate(x.ts)} · ${fmtTime(x.ts)}</div>`:''}
+        </div>
+        <div class="del-item" onclick="delItem('${store.id}','${x.id}')">✕</div>
+      </div>`;
+    }).join('');
+    list.innerHTML += `<div class="store ${(!searchQ && store.collapsed)?'collapsed':''}">
+      <div class="store-head">
+        <span class="chev" onclick="toggleStore('${store.id}')">▾</span>
+        <div class="store-title" onclick="editing?renameStore('${store.id}'):toggleStore('${store.id}')">${esc(store.name)}</div>
+        <span class="store-count">${sDone}/${store.items.length}</span>
+        <span class="del-store" onclick="delStore('${store.id}')">🗑</span>
+      </div>
+      <div class="items">${itemsHtml||'<div class="item"><div class="txt note">No items yet</div></div>'}</div>
+      <div class="additem">
+        <input placeholder="Add item to ${esc(store.name)}…" onkeydown="if(event.key==='Enter')addItem('${store.id}',this)">
+        <button onclick="addItem('${store.id}',this.previousElementSibling)">Add</button>
+      </div>
+    </div>`;
+  });
+  if(searchQ && !list.innerHTML.trim()) list.innerHTML=`<div class="empty">No items match "${esc(searchQ)}".</div>`;
+  const pct = total? Math.round(done/total*100):0;
+  document.getElementById('progfill').style.width=pct+'%';
+  document.getElementById('progtext').textContent=`${done} of ${total} done · ${pct}%`;
+  renderLog();
+}
+function esc(s){ return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function renderLog(){
+  const log=document.getElementById('view-log');
+  const subs=(data.submissions||[]);
+  if(!subs.length){ log.innerHTML=`<div class="empty">No submitted shops yet.<br>Tick what you bought and tap “Submit shop”. You can add a bill photo or a total afterwards to compare over time.</div>`; return; }
+  const costs=subs.filter(s=>typeof s.cost==='number').map(s=>s.cost);
+  let summary='';
+  if(costs.length){
+    const avg=costs.reduce((a,b)=>a+b,0)/costs.length, min=Math.min(...costs), max=Math.max(...costs);
+    summary=`<div class="cost-sum">
+      <div class="cs-box"><span class="cs-l">Shops</span><span class="cs-v">${subs.length}</span></div>
+      <div class="cs-box"><span class="cs-l">Average</span><span class="cs-v">$${avg.toFixed(2)}</span></div>
+      <div class="cs-box"><span class="cs-l">Lowest</span><span class="cs-v lo">$${min.toFixed(2)}</span></div>
+      <div class="cs-box"><span class="cs-l">Highest</span><span class="cs-v hi">$${max.toFixed(2)}</span></div>
+    </div>`;
+  }
+  log.innerHTML = summary + subs.map((s,i)=>{
+    const cost = (typeof s.cost==='number')
+      ? `<span class="sub-cost" onclick="editSubCost(${i})">$${s.cost.toFixed(2)}</span>`
+      : `<span class="sub-cost none" onclick="editSubCost(${i})">+ add total</span>`;
+    const photo = s.photo
+      ? `<img class="bill-thumb" src="${s.photo}" onclick="viewPhoto(${i})"><span class="photo-act" onclick="delPhoto(${i})">remove</span>`
+      : `<span class="photo-act add" onclick="addPhoto(${i})">📷 Add bill photo</span>`;
+    const items=(s.items||[]).map(x=>`<div class="day-item"><span>${esc(x.n)}</span><span class="st">${esc((x.store||'').replace(/^[^ ]+ /,''))}</span></div>`).join('');
+    return `<div class="day"><div class="day-head"><span>${fmtDate(s.ts)} · ${fmtTime(s.ts)}</span>${cost}</div>
+      <div class="sub-meta"><span>${(s.items||[]).length} items</span><span class="photo-wrap">${photo}</span></div>${items}</div>`;
+  }).join('');
+}
+
+function findStore(sid){ return data.stores.find(s=>s.id===sid); }
+function toggle(sid,iid){ const x=findStore(sid).items.find(i=>i.id===iid); x.done=!x.done; x.ts=Date.now(); saveLocal(); render(); schedulePush(); }
+function toggleStore(sid){ const s=findStore(sid); s.collapsed=!s.collapsed; saveLocal(); render(); schedulePush(); }
+function collapseAll(){ const anyOpen=data.stores.some(s=>!s.collapsed); data.stores.forEach(s=>s.collapsed=anyOpen); saveLocal(); render(); schedulePush(); }
+
+function addItem(sid,input){ const v=(input.value||'').trim(); if(!v) return; findStore(sid).items.push(it(v)); input.value=''; saveLocal(); render(); schedulePush();
+  const boxes=document.querySelectorAll('.additem input'); }
+function delItem(sid,iid){ const s=findStore(sid); s.items=s.items.filter(i=>i.id!==iid); saveLocal(); render(); schedulePush(); }
+function renameItem(sid,iid){ const x=findStore(sid).items.find(i=>i.id===iid); askInput('Rename item', x.n, v=>{ x.n=(v||'').trim()||x.n; saveLocal(); render(); schedulePush(); }, {okText:'Save'}); }
+function renameStore(sid){ const s=findStore(sid); askInput('Rename section', s.name, v=>{ s.name=(v||'').trim()||s.name; saveLocal(); render(); schedulePush(); }, {okText:'Save'}); }
+function delStore(sid){ const s=findStore(sid); askConfirm('Delete section?', 'Delete "'+s.name+'" and all its items? This cannot be undone.', ()=>{ data.stores=data.stores.filter(x=>x.id!==sid); saveLocal(); render(); schedulePush(); }); }
+function addStore(){ askInput('New section name', '', v=>{ const name=(v||'').trim(); if(!name) return; data.stores.push({id:uid(), name:name, collapsed:false, items:[]}); saveLocal(); render(); schedulePush(); }, {placeholder:'e.g. 🥩 Butcher', okText:'Add section'}); }
+
+function toggleEdit(){
+  if(!editing){ enterEdit(); return; }
+  editing=false; document.body.classList.remove('editing');
+  document.getElementById('editBtn').textContent='✏️ Edit list'; render();
+}
+function enterEdit(){ editing=true; document.body.classList.add('editing');
+  document.getElementById('editBtn').textContent='✓ Done editing'; render(); }
+function openPin(){ const m=document.getElementById('pinModal'); document.getElementById('pinInput').value=''; document.getElementById('pinErr').textContent=''; m.classList.add('show'); setTimeout(()=>document.getElementById('pinInput').focus(),60); }
+function closePin(){ document.getElementById('pinModal').classList.remove('show'); }
+function submitPin(){ const v=document.getElementById('pinInput').value.trim();
+  if(v===EDIT_CODE){ closePin(); enterEdit(); }
+  else{ document.getElementById('pinErr').textContent='Wrong code — try again.'; document.getElementById('pinInput').value=''; document.getElementById('pinInput').focus(); } }
+
+/* ===== In-app dialogs (replace blocked prompt/confirm) ===== */
+let _askCb=null;
+function askInput(title, value, cb, opts){
+  opts=opts||{}; _askCb=cb;
+  document.getElementById('askTitle').textContent=title;
+  document.getElementById('askMsg').textContent=opts.msg||'';
+  const inp=document.getElementById('askInput'); inp.style.display='block';
+  inp.value=value||''; inp.placeholder=opts.placeholder||''; inp.inputMode=opts.numeric?'decimal':'text';
+  const ok=document.getElementById('askOk'); ok.textContent=opts.okText||'Save';
+  ok.onclick=()=>{ const v=inp.value; const cb=_askCb; askClose(); if(cb)cb(v); };
+  inp.onkeydown=(e)=>{ if(e.key==='Enter') ok.onclick(); };
+  document.getElementById('askModal').classList.add('show'); setTimeout(()=>inp.focus(),60);
+}
+function askConfirm(title,msg,cb){
+  _askCb=cb;
+  document.getElementById('askTitle').textContent=title;
+  document.getElementById('askMsg').textContent=msg||'';
+  document.getElementById('askInput').style.display='none';
+  const ok=document.getElementById('askOk'); ok.textContent='Confirm'; ok.onclick=()=>{ const cb=_askCb; askClose(); if(cb)cb(true); };
+  document.getElementById('askModal').classList.add('show');
+}
+function askInfo(title,msg){
+  _askCb=null;
+  document.getElementById('askTitle').textContent=title;
+  document.getElementById('askMsg').textContent=msg||'';
+  document.getElementById('askInput').style.display='none';
+  const ok=document.getElementById('askOk'); ok.textContent='OK'; ok.onclick=askClose;
+  document.getElementById('askModal').classList.add('show');
+}
+function askCancel(){ askClose(); }
+function askClose(){ document.getElementById('askModal').classList.remove('show'); _askCb=null; }
+
+/* ===== Submit shop + bill logging ===== */
+function isColesItem(x){ return /coles/i.test(x.store||'') || /coles/i.test(x.d||''); }
+function submitList(){
+  const items=[]; data.stores.forEach(s=>s.items.forEach(x=>{ if(x.done) items.push({n:x.n, d:x.d||'', store:s.name}); }));
+  if(!items.length){ askInfo('Nothing ticked yet','Tick the items you bought, then tap Submit — they’ll be saved to your Order Log.'); return; }
+  const colesNames = items.filter(isColesItem).map(x=>x.n);
+  data.submissions = data.submissions||[];
+  data.submissions.unshift({ts:Date.now(), items:items.map(x=>({n:x.n,store:x.store})), cost:null, photo:null});
+  data.stores.forEach(s=>s.items.forEach(x=>{ x.done=false; x.ts=0; }));
+  saveLocal(); render(); schedulePush();
+  if(colesNames.length) showColes(colesNames, 'Coles items — add to your basket');
+  else showTab('log');
+}
+function editSubCost(i){ const s=(data.submissions||[])[i]; if(!s) return;
+  askInput('Bill total (optional)', s.cost!=null?String(s.cost):'', v=>{ const c=parseFloat(String(v).replace(/[^0-9.]/g,'')); s.cost=isNaN(c)?null:c; saveLocal(); render(); schedulePush(); }, {placeholder:'$ total', okText:'Save', numeric:true}); }
+/* Bill photo (optional) */
+let _photoIdx=-1;
+function addPhoto(i){ _photoIdx=i; const inp=document.getElementById('billPhoto'); inp.value=''; inp.click(); }
+function onBillPhoto(inp){
+  const f=inp.files&&inp.files[0]; if(!f) return;
+  const rd=new FileReader();
+  rd.onload=()=>{ const img=new Image(); img.onload=()=>{
+    const max=1200; let w=img.width, h=img.height;
+    if(w>h && w>max){ h=Math.round(h*max/w); w=max; } else if(h>max){ w=Math.round(w*max/h); h=max; }
+    const c=document.createElement('canvas'); c.width=w; c.height=h; c.getContext('2d').drawImage(img,0,0,w,h);
+    const durl=c.toDataURL('image/jpeg',0.5);
+    const s=(data.submissions||[])[_photoIdx]; if(s){ s.photo=durl; saveLocal(); render(); schedulePush(); }
+    scanReceipt(durl);
+  }; img.src=rd.result; };
+  rd.readAsDataURL(f);
+}
+/* AI receipt scan -> replace the whole list */
+async function scanReceipt(durl){
+  if(!cloudOn) return;
+  setSync('Scanning receipt…');
+  try{
+    const {data:res, error} = await sb.functions.invoke('scan-receipt', { body:{ image: durl } });
+    if(error){ setSync('Scan failed','off'); askInfo('Couldn’t scan the receipt', (error.message||'The scanner isn’t set up yet.')+' '); return; }
+    const items = (res && Array.isArray(res.items)) ? res.items : [];
+    if(items.length) applyScannedItems(items);
+    else { setSync('No items found','off'); askInfo('No items found','The photo didn’t contain a readable receipt. Try a clearer, straight-on photo.'); }
+  }catch(e){ setSync('Scan failed','off'); }
+}
+function applyScannedItems(items){
+  const secItems = items.map(x=>{
+    const note=[ (x.qty && String(x.qty)!=='1') ? String(x.qty) : '', (x.price!=null && x.price!=='') ? ('$'+x.price) : '' ].filter(Boolean).join(' · ');
+    return it(String(x.name||'Item'), note);
+  });
+  data.stores = [{ id:'r'+uid(), name:'🧾 From receipt', collapsed:false, items: secItems }];
+  data.updatedAt = Date.now();
+  localStorage.setItem(LKEY, JSON.stringify(data));
+  render(); schedulePush(); setSync('Synced ✓'); showTab('list');
+}
+function viewPhoto(i){ const s=(data.submissions||[])[i]; if(!s||!s.photo) return; const m=document.getElementById('photoModal'); m.querySelector('img').src=s.photo; m.classList.add('show'); }
+function closePhoto(){ document.getElementById('photoModal').classList.remove('show'); }
+function delPhoto(i){ const s=(data.submissions||[])[i]; if(!s) return; askConfirm('Remove bill photo?','', ()=>{ s.photo=null; saveLocal(); render(); schedulePush(); }); }
+
+/* ===== Send to Coles ===== */
+function clx(n){ return n.replace(/\s*[—–]\s.*$/,'').replace(/\s*\(.*?\)/g,'').replace(/\s*·.*$/,'').replace(/\s*\/\s*/,' ').trim(); }
+function colesItems(){ const a=[]; data.stores.forEach(s=>s.items.forEach(x=>{ if(!x.done) a.push(x.n); })); return a; }
+let _colesNames=[];
+function openColes(){ showColes(colesItems(), 'items still to buy'); }
+function showColes(names, label){
+  _colesNames=names;
+  const links=names.map(n=>`<a class="coles-item" href="https://www.coles.com.au/search?q=${encodeURIComponent(clx(n))}" target="_blank" rel="noopener">${esc(n)}<span class="coles-go">Add ›</span></a>`).join('');
+  const m=document.getElementById('colesModal');
+  m.querySelector('.rc-sub').textContent=names.length+' '+(label||'items');
+  m.querySelector('.rc-body').innerHTML = names.length
+    ? `<div class="rc-note">Tap each item to open it on the Coles web app and add it to your basket. Coles doesn’t let outside apps fill the basket directly, so this opens each product ready to add.</div><button class="btn coles coles-copy" onclick="copyColes()">📋 Copy list</button>${links}`
+    : `<div class="empty">No Coles items here 🎉</div>`;
+  m.classList.add('show');
+}
+function closeColes(){ document.getElementById('colesModal').classList.remove('show'); }
+function copyColes(){ navigator.clipboard.writeText(_colesNames.join('\n')).then(()=>{ const b=document.querySelector('.coles-copy'); if(b){ b.textContent='Copied ✓'; setTimeout(()=>b.textContent='📋 Copy list',1500); } }); }
+function showTab(t){
+  ['list','plan','prep','log'].forEach(x=>{
+    document.getElementById('tab-'+x).classList.toggle('active',t===x);
+    document.getElementById('view-'+x).classList.toggle('hidden',t!==x);
+  });
+  document.querySelector('.addstore').classList.toggle('hidden',t!=='list');
+  document.getElementById('searchbar').classList.toggle('hidden',t!=='list');
+  document.querySelectorAll('.toolbar').forEach(el=>el.classList.toggle('hidden',t!=='list'));
+  if(t==='plan') renderPlan();
+  if(t==='prep') renderPrep();
+}
+let searchQ='';
+function doSearch(v){ searchQ=(v||'').trim().toLowerCase(); document.getElementById('searchbar').classList.toggle('has',!!searchQ); render(); }
+function clearSearch(){ searchQ=''; const i=document.getElementById('search'); if(i)i.value=''; document.getElementById('searchbar').classList.remove('has'); render(); }
+function hl(txt){ if(!searchQ) return esc(txt); const i=txt.toLowerCase().indexOf(searchQ); if(i<0) return esc(txt); return esc(txt.slice(0,i))+'<mark>'+esc(txt.slice(i,i+searchQ.length))+'</mark>'+esc(txt.slice(i+searchQ.length)); }
+function dishLink(name){ return `<span class="dish" onclick="event.stopPropagation();openRecipe('${name}')">${name}</span>`; }
+
+/* ===== Meal plan ===== */
+const PLAN_DAYS = [
+  {d:"Mon", full:"Monday",    aLunch:"Chilli Paneer Gravy Style", dinner:"Kadhai Paneer"},
+  {d:"Tue", full:"Tuesday",   aLunch:"Egg Curry",                 dinner:"Shahi Paneer"},
+  {d:"Wed", full:"Wednesday", aLunch:"Achari Paneer Tikka",       dinner:"Chilli Paneer Gravy Style"},
+  {d:"Thu", full:"Thursday",  aLunch:"Kadhai Paneer",             dinner:"Egg Curry"},
+  {d:"Fri", full:"Friday",    aLunch:"Shahi Paneer",              dinner:"Achari Paneer Tikka"},
+  {d:"Sat", full:"Saturday",  aLunch:"Chilli Paneer Gravy Style", dinner:"Kadhai Paneer"},
+  {d:"Sun", full:"Sunday",    aLunch:"Egg Curry",                 dinner:"Shahi Paneer"},
+];
+const PAGES = {"Kadhai Paneer":"p.36","Shahi Paneer":"p.39","Chilli Paneer Gravy Style":"p.34","Egg Curry":"p.50","Achari Paneer Tikka":"p.15"};
+function pg(n){ return PAGES[n] ? " ("+PAGES[n]+")" : ""; }
+function todayIdx(){ const g=new Date().getDay(); return g===0?6:g-1; } // Mon=0 … Sun=6
+let planDay = todayIdx();
+function setPlanDay(i){ planDay=i; renderPlan(); }
+
+function mpRecipeExists(name){ const m=data.mealplan&&data.mealplan.recipesMap; return !!(m && name && m[name.toLowerCase()]); }
+function mpDish(name){ return mpRecipeExists(name) ? dishLink(name) : esc(name||''); }
+function renderImportedPlanHTML(mp){
+  const days=mp.days; let idx=Math.min(planDay, days.length-1); if(idx<0) idx=0;
+  const pills=days.map((d,i)=>`<div class="daypill ${i===idx?'active':''}" onclick="setPlanDay(${i})">${esc((d.day||('Day '+(i+1))).slice(0,3))}</div>`).join('');
+  const day=days[idx];
+  const tl=(day.entries||[]).map(e=>`<div class="tl-item"><div class="tl-time" style="width:auto;min-width:64px">${esc(e.slot||'')}</div><div class="tl-body"><div class="tl-slot">${mpDish(e.text)}</div>${e.detail?`<div class="tl-both">${esc(e.detail)}</div>`:''}</div></div>`).join('');
+  const glance=days.map((d,i)=>`<div class="gl2 ${i===idx?'today':''}" onclick="setPlanDay(${i})"><div class="gl2-day">${esc(d.day||('Day '+(i+1)))}</div>${(d.entries||[]).map(e=>`<div class="gl2-line"><b>${esc(e.slot||'')}</b> — ${mpDish(e.text)}</div>`).join('')}</div>`).join('');
+  return `<div class="plan-head">${esc(mp.title||'Meal plan')}${mp.people&&mp.people.length?`<span class="totals">${esc(mp.people.join(' · '))}</span>`:''}</div>
+    <div class="daypills">${pills}</div>
+    <div class="plan-head" style="font-size:15px;margin-top:2px">${esc(day.day||('Day '+(idx+1)))}</div>
+    <div class="timeline">${tl||'<div class="tl-item"><div class="tl-body tl-both">No meals listed.</div></div>'}</div>
+    <div class="glance-wrap"><div class="ed-title">Week at a glance</div><div class="glance">${glance}</div>
+      <div class="legend">Imported plan. Tap any underlined dish for its recipe, or a day to jump to it.</div></div>`;
+}
+function renderPlan(){
+  const v=document.getElementById('view-plan');
+  const importBar=`<div class="toolbar" style="margin:10px 0 2px"><button class="btn primary" onclick="regeneratePlan()">✨ Generate my plan</button><button class="btn" onclick="openImport()">📎 Import</button></div>`;
+  const mp=data.mealplan;
+  if(mp && Array.isArray(mp.days) && mp.days.length){ v.innerHTML=importBar+renderImportedPlanHTML(mp); return; }
+  const ti=todayIdx();
+  const pills = PLAN_DAYS.map((x,i)=>`<div class="daypill ${i===planDay?'active':''} ${i===ti?'today':''}" onclick="setPlanDay(${i})">${x.d}</div>`).join('');
+  const day = PLAN_DAYS[planDay];
+  const rows = [
+    {t:"7:00",  slot:"Ritual waters", both:"Warm lemon + turmeric-ginger + jeera water — all together on waking"},
+    {t:"7:30",  slot:"Meal 1 · "+dishLink("Berry Sweet Smoothie"), a:"250ml milk · 180g berries · whey + collagen · saffron<br><b>~55g P / 430 kcal</b>", v:"150ml milk · 120g berries · whey + collagen · saffron<br><b>~52g P / 360 kcal</b>"},
+    {t:"10:30", slot:"Meal 2 · Coffee + nuts", a:"Coffee (skim, stevia) + 8 almonds<br><b>~3g P / 90 kcal</b>", v:"Coffee (skim, stevia) + 3 walnut halves<br><b>~3g P / 70 kcal</b>"},
+    {t:"12:30", slot:"Meal 3 · Lunch", a:dishLink(day.aLunch)+pg(day.aLunch)+"<br><b>~38g P / 520 kcal</b>", v:dishLink("Mexican Burrito Bowl")+" (constant)<br><b>~33g P / 430 kcal</b>"},
+    {t:"4:30",  slot:"Workout", both:"Training block"},
+    {t:"5:30",  slot:"Meal 4 · Post-workout", a:"1 coconut water + 8 nuts<br><b>~4g P / 110 kcal</b>", v:"1 coconut water + 6 almonds<br><b>~4g P / 90 kcal</b>"},
+    {t:"7:30",  slot:"Meal 5 · Dinner (shared)", a:dishLink(day.dinner)+pg(day.dinner)+"<br><b>~44g P / 560 kcal</b>", v:dishLink(day.dinner)+"<br><b>~40g P / 420 kcal</b>"},
+    {t:"9:00",  slot:"Optional", v:"½ scoop whey in warm milk — Vartika top-up"},
+  ];
+  const tl = rows.map(r=>{
+    const body = r.both
+      ? `<div class="tl-both">${r.both}</div>`
+      : `<div class="tl-split"><div class="tl-p"><span class="who a">Akarsh</span>${r.a||'—'}</div><div class="tl-p"><span class="who v">Vartika</span>${r.v||'—'}</div></div>`;
+    return `<div class="tl-item"><div class="tl-time">${r.t}</div><div class="tl-body"><div class="tl-slot">${r.slot}</div>${body}</div></div>`;
+  }).join('');
+  const glance = PLAN_DAYS.map((x,i)=>`<div class="gl2 ${i===ti?'today':''}" onclick="setPlanDay(${i})">
+      <div class="gl2-day">${x.full}${i===ti?'<span class="now">Today</span>':''}</div>
+      <div class="gl2-line">🥘 <b>Lunch</b> — Akarsh: ${dishLink(x.aLunch)} · Vartika: ${dishLink("Mexican Burrito Bowl")}</div>
+      <div class="gl2-line">🍽 <b>Dinner</b> (both): ${dishLink(x.dinner)}</div>
+    </div>`).join('');
+  v.innerHTML = importBar + `
+    <div class="daypills">${pills}</div>
+    <div class="plan-head">${day.full}${planDay===ti?' · Today':''}
+      <span class="totals">Akarsh ~144g P / ~1710 kcal · Vartika ~132g P / ~1370 kcal (+ top-up)</span></div>
+    <div class="timeline">${tl}</div>
+    <div class="everyday">
+      <div class="ed-title">Every day, both of you — the constants</div>
+      <div class="ed-item">🌅 Ritual waters on waking · collagen in the smoothie · multivitamin with Meal 1</div>
+      <div class="ed-item">🥤 Meal 1 smoothie · ☕ Meal 2 coffee + nuts · 🥥 Meal 4 coconut water + nuts</div>
+      <div class="ed-item">🌯 Vartika's lunch is the Mexican Burrito Bowl every day</div>
+    </div>
+    <div class="glance-wrap">
+      <div class="ed-title">Week at a glance — only lunch & dinner change</div>
+      <div class="glance">${glance}</div>
+      <div class="legend">5 dishes on rotation, each ~3× a week. Tap any underlined dish to see its full recipe. Tap a day to jump to it.</div>
+    </div>`;
+}
+
+/* ===== Recipes ===== */
+const RECIPES = {
+  "Berry Sweet Smoothie": { page:"p.72", macros:"Akarsh ~55g P / 430 kcal · Vartika ~52g P / 360 kcal",
+    note:"Both, every day (Meal 1). Based on the Mixed Berry Smoothie, boosted with whey + collagen so it doubles as your protein anchor.",
+    ing:["150g low-fat Greek yogurt (both)","Fat-free milk — 250ml Akarsh / 150ml Vartika","Mixed berries — 180g Akarsh / 120g Vartika (blueberries, strawberries, raspberries)","1 scoop vanilla whey or plant protein","1 scoop collagen","2–3 saffron strands, ½ tsp stevia + ice"],
+    method:["Blend everything until smooth.","Take with the multivitamin (Meal 1)."] },
+  "Mexican Burrito Bowl": { macros:"~33g P / 430 kcal",
+    note:"Vartika, every day (Meal 3).",
+    ing:["80g cooked black beans (or rajma), taco-spiced","70g low-fat paneer OR 100g tofu, cubed & pan-seared with taco seasoning","40g cooked rice","Lettuce, capsicum, tomato, red onion, 30g sweetcorn","Fresh salsa: tomato, onion, coriander, lime, jalapeño","30g low-fat Greek yogurt as sour-cream + squeeze of lime"],
+    method:["Warm the spiced beans.","Sear the paneer/tofu with taco seasoning.","Build the bowl over rice with veg, salsa and yogurt-lime."] },
+  "Base gravy": { macros:"Batch — makes ~4 dish portions",
+    note:"The shared onion-tomato base. Kadhai, Shahi, Egg Curry (and a spare) all build off this.",
+    ing:["6 onions","8 tomatoes","4 tbsp ginger-garlic paste","1 tsp cumin seeds","1 tsp turmeric, 2 tsp Kashmiri red chilli, 2 tsp coriander powder","Salt, spray oil"],
+    method:["Blend onions to a coarse paste; separately blend tomatoes to a puree.","Spray oil in a large pan, add cumin seeds and let them splutter.","Add the onion paste, cook on medium 8–10 min until golden and the raw smell is gone.","Add the ginger-garlic paste, cook 2 min.","Add tomato puree + turmeric, chilli and coriander powder + salt. Cook 10–12 min until it thickens and oil separates.","Cool and divide into 4 equal portions."] },
+  "Kadhai Paneer": { page:"p.36", macros:"~302 kcal / 21g P (curry) · batch ~3–4 servings",
+    ing:["1 base gravy portion","300g cubed low-fat paneer","2 capsicum + 1 onion (cubed)","3–4 Kashmiri chillies + 1 tbsp coriander seeds (for kadhai masala)","Garam masala, kasuri methi, spray oil","+ rice: 40g Akarsh / 30g Vartika"],
+    method:["Dry-roast the Kashmiri chillies + coriander seeds 1–2 min until fragrant; cool and grind coarse (this is your kadhai masala).","Spray oil, sauté cubed onion + capsicum 3–4 min on high — keep slightly crunchy. Scoop a little for garnish.","Add the base portion + ground kadhai masala; cook 3–4 min.","Add the paneer, a splash of water, garam masala and a pinch of crushed kasuri methi. Simmer 3–4 min.","Cool and portion."] },
+  "Shahi Paneer": { page:"p.39", macros:"~314 kcal / 29g P · batch ~3–4 servings",
+    ing:["1 base gravy portion","300g low-fat paneer","~400ml low-fat milk","10 cashews (soaked)","Shahi paneer masala, 1 bay leaf + 2 cloves, spray oil","+ rice: 40g Akarsh / 30g Vartika"],
+    method:["Blend the soaked cashews with a little milk into a smooth paste.","Warm the base portion, add cashew paste + shahi masala + bay leaf/cloves; cook 2 min.","Lower the heat and slowly stir in the milk. Simmer gently 5–7 min into a silky gravy — don't let it boil hard or the milk can split.","Add the paneer and simmer 3 min.","Cool and portion."] },
+  "Chilli Paneer Gravy Style": { page:"p.34", macros:"~290 kcal / 28g P · batch ~3–4 servings",
+    note:"Has its own quick base — no base gravy needed.",
+    ing:["300g low-fat paneer (cubed)","2 capsicum + 1 onion (cubed)","4 tbsp soy sauce, 2 tbsp ketchup, 2 tbsp green chilli sauce","2 tsp ginger-garlic, a few black peppercorns","2 tbsp cornflour mixed in water, spray oil","+ rice: 40g Akarsh / 30g Vartika"],
+    method:["Spray oil, add ginger-garlic + crushed peppercorns, sauté 1 min.","Add the onion + capsicum, cook on high 3–4 min.","Add the soy sauce, ketchup and chilli sauce; mix well.","Pour in the cornflour-water slurry and stir until the sauce turns glossy and thick.","Fold in the paneer and toss 2 min to coat. Cool and portion."] },
+  "Egg Curry": { page:"p.50", macros:"~270 kcal / 28g P (3 eggs) · batch ~3–4 servings",
+    note:"Whites-heavy split for macros: Akarsh 1 whole + 2 whites / Vartika 1 whole + 1 white.",
+    ing:["1 base gravy portion","8–10 boiled eggs","Egg-curry masala, pinch turmeric + chilli, spray oil","+ rice: 40g Akarsh / 30g Vartika"],
+    method:["Lightly pan-sear the boiled eggs in a little spray oil with a pinch of turmeric + chilli until the skins blister (optional, adds flavour).","Warm the base portion, add egg-curry masala + a splash of water; simmer 5 min.","Add the eggs and simmer 3–4 min so they soak up the gravy.","Cool and portion, keeping the eggs in the gravy."] },
+  "Achari Paneer Tikka": { page:"p.15", macros:"~264 kcal / 27g P · batch ~3–4 servings",
+    note:"Start this first so it has time to marinate.",
+    ing:["300g low-fat paneer (cubed)","2 capsicum + 1 onion (chunks)","4 tbsp yogurt","1 tsp each mustard / fennel / cumin / turmeric / chilli powder","Garam masala, pinch methi powder, salt, lemon","+ green salad + rice: 40g Akarsh / 30g Vartika"],
+    method:["Mix the yogurt with all the spices, salt and a squeeze of lemon into a marinade.","Fold in the paneer and veg; rest 30–60 min.","Spread on a lined tray and bake/air-fry at 180°C for ~15 min (or pan-grill) until golden at the edges.","Cool and portion; keep a little chopped salad separately."] },
+  "Burrito bowl kit": { macros:"Beans + salsa + dressing for the week",
+    note:"Vartika's weekly kit. Assemble the bowl fresh each day.",
+    ing:["Beans: 2 cans black beans (or cooked rajma), 1 tsp cumin, 1 tsp smoked paprika/taco seasoning, 2 cloves garlic, salt","Salsa: tomato, red onion, coriander, lime, jalapeño, salt","Dressing: Greek yogurt + lime + pinch salt"],
+    method:["Beans: spray oil, sauté garlic, add drained beans + cumin + taco seasoning + a splash of water; simmer 8–10 min, lightly mashing some. Cool and portion.","Salsa: dice tomato, red onion and jalapeño; mix with coriander, lime and salt. Store in a jar (2–3 days).","Dressing: stir Greek yogurt with lime + a pinch of salt; store.","Also pack ready: cooked rice, seared paneer/tofu, shredded lettuce, corn."] },
+};
+function openRecipe(name){
+  let r=RECIPES[name];
+  const mm=data.mealplan&&data.mealplan.recipesMap;
+  if(!r && mm && name && mm[name.toLowerCase()]){ const im=mm[name.toLowerCase()]; r={page:im.page||'', macros:'', note:'', ing:im.ingredients||[], method:im.steps||[]}; }
+  if(!r) return;
+  const m=document.getElementById('recipeModal');
+  m.querySelector('.rc-title').textContent = name + (r.page? '  '+r.page : '');
+  m.querySelector('.rc-sub').textContent = r.macros||'';
+  m.querySelector('.rc-body').innerHTML =
+    (r.note?`<div class="rc-note">${r.note}</div>`:'')+
+    `<div class="rc-h">Ingredients</div><ul class="rc-ing">${(r.ing||[]).map(x=>`<li>${x}</li>`).join('')}</ul>`+
+    `<div class="rc-h">Method</div><ol class="rc-meth">${(r.method||[]).map(x=>`<li>${x}</li>`).join('')}</ol>`;
+  m.classList.add('show');
+}
+function closeRecipe(){ document.getElementById('recipeModal').classList.remove('show'); }
+
+/* ===== Import a meal plan ===== */
+function openImport(){ document.getElementById('planText').value=''; document.getElementById('importMsg').textContent=''; document.getElementById('importModal').classList.add('show'); }
+function closeImport(){ document.getElementById('importModal').classList.remove('show'); }
+function importMsg(t,ok){ const e=document.getElementById('importMsg'); e.textContent=t||''; e.className='auth-msg'+(ok?' ok':''); }
+function loadScript(src){ return new Promise((res,rej)=>{ if([...document.scripts].some(s=>s.src===src)){res();return;} const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=()=>rej(new Error('load failed')); document.head.appendChild(s); }); }
+function fileToResizedDataURL(f,max){ return new Promise((res,rej)=>{ const rd=new FileReader(); rd.onload=()=>{ const img=new Image(); img.onload=()=>{ let w=img.width,h=img.height; if(w>h&&w>max){h=Math.round(h*max/w);w=max;}else if(h>max){w=Math.round(w*max/h);h=max;} const c=document.createElement('canvas'); c.width=w;c.height=h; c.getContext('2d').drawImage(img,0,0,w,h); res(c.toDataURL('image/jpeg',0.7)); }; img.onerror=rej; img.src=rd.result; }; rd.onerror=rej; rd.readAsDataURL(f); }); }
+async function docxToText(f){ await loadScript('https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js'); const ab=await f.arrayBuffer(); const r=await window.mammoth.extractRawText({arrayBuffer:ab}); return r.value||''; }
+async function ensurePdf(){ await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'); window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; }
+async function pdfToText(f){ await ensurePdf(); const ab=await f.arrayBuffer(); const pdf=await window.pdfjsLib.getDocument({data:ab}).promise; let out=''; const n=Math.min(pdf.numPages,12); for(let i=1;i<=n;i++){ const pg=await pdf.getPage(i); const tc=await pg.getTextContent(); out+=tc.items.map(x=>x.str).join(' ')+'\n'; } return out; }
+async function pdfFirstPageImage(f){ await ensurePdf(); const ab=await f.arrayBuffer(); const pdf=await window.pdfjsLib.getDocument({data:ab}).promise; const pg=await pdf.getPage(1); const vp=pg.getViewport({scale:1.6}); const c=document.createElement('canvas'); c.width=vp.width;c.height=vp.height; await pg.render({canvasContext:c.getContext('2d'),viewport:vp}).promise; return c.toDataURL('image/jpeg',0.7); }
+function onPlanFile(inp){ const f=inp.files&&inp.files[0]; inp.value=''; if(f) handlePlanFile(f); }
+async function handlePlanFile(f){
+  const name=(f.name||'').toLowerCase();
+  try{
+    importMsg('Reading file…',true);
+    if((f.type||'').startsWith('image/')){ await sendPlan({image: await fileToResizedDataURL(f,1600)}); }
+    else if((f.type==='application/pdf')||name.endsWith('.pdf')){ const t=await pdfToText(f); if(t && t.replace(/\s/g,'').length>60){ await sendPlan({text:t}); } else { await sendPlan({image: await pdfFirstPageImage(f)}); } }
+    else if(name.endsWith('.docx')){ await sendPlan({text: await docxToText(f)}); }
+    else { importMsg('Unsupported file — use a photo, PDF, Word (.docx), or paste text.'); }
+  }catch(e){ importMsg('Couldn’t read that file. Try a photo of it, or paste the text.'); }
+}
+async function importFromText(){ const t=(document.getElementById('planText').value||'').trim(); if(t.length<10){ importMsg('Paste a bit more of the plan first.'); return; } await sendPlan({text:t}); }
+async function sendPlan(payload){
+  if(!cloudOn){ importMsg('Please sign in first.'); return; }
+  importMsg('Reading your plan with AI…',true);
+  try{
+    const {data:res,error}=await sb.functions.invoke('import-mealplan',{body:payload});
+    if(error){ importMsg('Import failed: '+(error.message||'the scanner may not be set up')); return; }
+    if(!res || !(Array.isArray(res.days)&&res.days.length)){ importMsg('Couldn’t find a meal plan in that. Try a clearer file or paste the text.'); return; }
+    applyMealplan(res); closeImport(); setSync('Synced ✓');
+    if(profile && profile.data && !profile.data.onboarded){ profile.data.onboarded=true; saveProfileData(); const g=document.getElementById('obGate'); if(g) g.classList.remove('show'); applyGate&&applyGate(); }
+  }catch(e){ importMsg('Import failed. Please try again.'); }
+}
+function applyMealplan(mp){
+  mp.recipesMap={}; (mp.recipes||[]).forEach(r=>{ if(r&&r.name) mp.recipesMap[String(r.name).toLowerCase()]=r; });
+  data.mealplan=mp;
+  const groups={}; (mp.shopping||[]).forEach(x=>{ const sec=((x.section||'Other')+'').trim()||'Other'; (groups[sec]=groups[sec]||[]).push(it(x.name||'Item', x.note||'')); });
+  const emo=s=>({'Produce':'🥬','Dairy & eggs':'🥚','Dairy':'🥚','Meat & protein':'🍗','Meat':'🍗','Pantry':'🫙','Frozen':'❄️','Spices':'🌶️','Bakery':'🍞','Drinks':'🥤','Other':'🛒'}[s]||'🛒');
+  if(Object.keys(groups).length){ data.stores=Object.keys(groups).map(sec=>({id:'m'+uid(), name:emo(sec)+' '+sec, collapsed:false, items:groups[sec]})); }
+  planDay=0; data.updatedAt=Date.now(); saveLocal(); render(); schedulePush(); showTab('plan');
+}
+
+/* ===== Prep day ===== */
+function renderPrep(){
+  const v=document.getElementById('view-prep');
+  const cut=[
+    ["Onions (~1.5kg)","Dice most; keep 2 sliced red onions for bowls"],
+    ["Tomatoes (~1.5kg)","Roughly chop / puree — base gravy"],
+    ["Capsicum (~8)","Cube — Kadhai, Chilli Paneer, Achari + bowls"],
+    ["Ginger + garlic","Blitz a big batch of paste — every dish"],
+    ["Green chillies","Finely chop — gravies + salsa"],
+    ["Lettuce (2 heads)","Shred, store dry with paper towel"],
+    ["Cucumber, tomato, red onion","Dice — bowls + Achari salad"],
+    ["Coriander + mint","Chop — garnish + salsa"],
+    ["Lemons / limes","Cut into wedges — bowls, marinades, waters"],
+    ["Cashews","Soak — for Shahi Paneer"],
+    ["Paneer (~1.2kg)","Cube; grill a tray of it"],
+    ["Eggs (dozen)","Boil, peel, store — Egg Curry"],
+  ];
+  const cook=[
+    ["Boil eggs (whole dozen); set to cool","~12 min",null],
+    ["Cook rice in bulk (~7 portions); spread to cool","~20 min",null],
+    ["Make the shared onion-tomato base gravy (big batch)","~25 min","Base gravy"],
+    ["Kadhai Paneer — from base + roasted chilli-coriander masala","~10 min","Kadhai Paneer"],
+    ["Shahi Paneer — from base + milk + soaked cashews","~10 min","Shahi Paneer"],
+    ["Chilli Paneer — sauté veg, sauces, cornflour slurry, paneer","~10 min","Chilli Paneer Gravy Style"],
+    ["Egg Curry — simmer boiled eggs in base + egg masala","~10 min","Egg Curry"],
+    ["Achari Paneer — marinate & grill (start marinade FIRST)","~15 min","Achari Paneer Tikka"],
+    ["Burrito bowl kit — spiced beans + salsa + yogurt-lime","~20 min","Burrito bowl kit"],
+    ["Portion, label, fridge Mon–Wed / freeze Thu–Sun","~15 min",null],
+  ];
+  const cutRows = cut.map(c=>`<div class="prep-row"><div class="pr-t">${c[0]}</div><div class="pr-d">${c[1]}</div></div>`).join('');
+  const cookRows = cook.map((c,i)=>`<div class="prep-row"><span class="pr-time">${c[1]}</span><span class="step-num">${i+1}</span><span class="pr-t">${c[0]}</span>${c[2]?`<div class="rc-link" onclick="openRecipe('${c[2]}')">View recipe →</div>`:''}</div>`).join('');
+  v.innerHTML = `
+    <div class="prep-intro">One shop + one ~2-hour cook session (usually Monday) sets up the whole week. Cook the 5 dishes, portion them, fridge Mon–Wed and freeze Thu–Sun. Only the smoothie and burrito-bowl assembly are done fresh each day.</div>
+    <div class="prep-card"><div class="prep-head">Step 1 · Cut &amp; prep everything first</div>${cutRows}</div>
+    <div class="prep-card"><div class="prep-head">Step 2 · Cook in this order (~2 hrs)</div>${cookRows}</div>
+    <div class="prep-card"><div class="prep-head">Step 3 · Fridge vs freezer</div>
+      <div class="prep-row"><div class="pr-t">🧊 Fridge (Mon–Wed)</div><div class="pr-d">First 3 days of dishes, 2–3 rice portions, black beans, grilled paneer, chopped salad veg. Eat within 3–4 days.</div></div>
+      <div class="prep-row"><div class="pr-t">❄️ Freezer (Thu–Sun)</div><div class="pr-d">Remaining dish portions + extra rice. Thaw overnight in the fridge before the day you need it.</div></div>
+      <div class="prep-row"><div class="pr-t">🍳 Fresh each day</div><div class="pr-d">Smoothie, burrito-bowl assembly, ritual waters (2–5 min each).</div></div>
+      <div class="prep-row"><div class="pr-d">Label tip: mark each container with dish + day, e.g. "Egg Curry – Tue" / "Kadhai – Thu FREEZER". Cool rice quickly and refrigerate within an hour.</div></div>
+    </div>
+    <div class="prep-card"><div class="prep-head">Every day (5 minutes)</div>
+      <div class="prep-row">🌅 Ritual waters — lemon + turmeric-ginger + jeera (or pour from a 2-day jug)</div>
+      <div class="prep-row">🥤 Blend the smoothie — frozen berry bag + yogurt + milk + whey + collagen + saffron</div>
+      <div class="prep-row">🌯 Vartika: assemble the burrito bowl — warm beans + paneer + rice + veg + salsa + yogurt-lime</div>
+      <div class="prep-row">🍲 Reheat the day's dish + rice (thaw freezer portions the night before)</div>
+      <div class="prep-row">☕ Coffee + nuts (M2) · 🥥 coconut water + nuts post-workout (M4)</div>
+      <div class="prep-row">🥛 Vartika optional: ½ scoop whey in warm milk in the evening (top-up)</div>
+    </div>`;
+}
+function resetAll(){ askConfirm('Reset all ticks?', 'Clears all ticks (keeps your items).', ()=>{ data.stores.forEach(s=>s.items.forEach(x=>{ x.done=false; x.ts=0; })); saveLocal(); render(); schedulePush(); }); }
+
+/* ==================================================================
+   PROFILE · ONBOARDING · AI PLAN · TRIAL + STRIPE PAYWALL
+   ================================================================== */
+/* Two ways to unlock (amounts must match the Stripe Prices VJ creates) */
+const PLANS = {
+  ai:  { key:'ai',  label:'AI builds my plan', amount:'$49.99', per:'one-time', save:'MOST POPULAR', mode:'payment',
+         cta:'Generate my plan — $49.99',
+         note:'Our AI builds a personalised weekly plan, recipes and store-sorted grocery list from your answers. One-time, per plan.' },
+  byo: { key:'byo', label:'I have my own plan', amount:'$5', per:'/ month', save:'', mode:'subscription',
+         cta:'Subscribe — $5/month',
+         note:'Already have a plan? Upload it and use every tool — checklist, recipes, prep, receipts and sharing. $5/month, cancel anytime.' }
+};
+let selectedPlan = 'ai';
+let profile = null;            // { user_id, data:{...answers}, trial_start, subscription_status, stripe_customer_id }
+let obEditMode = false;
+
+const OB_SEX     = ['Female','Male','Other'];
+const OB_ACTIVITY= ['Sedentary','Lightly active','Moderately active','Very active','Athlete'];
+const OB_GOALS   = ['Lose weight','Maintain weight','Build muscle','High protein','More energy','Eat healthier','Save time','Save money'];
+const OB_DIET    = ['Omnivore','Vegetarian','Vegan','Eggetarian','Pescatarian','Flexitarian','Keto','Halal','Jain'];
+const OB_CUISINE = ['Indian','Italian','Mexican','Thai','Chinese','Japanese','Mediterranean','Middle Eastern','American','Vietnamese','Korean','Continental'];
+const OB_ALLERGENS=['Peanuts','Tree nuts','Dairy','Eggs','Gluten','Shellfish','Fish','Soy','Sesame'];
+const OB_SKILL   = ['Beginner','Comfortable','Confident','Advanced'];
+const OB_GADGETS = ['Oven','Stovetop','Microwave','Air fryer','Blender','Food processor','Pressure cooker / Instant Pot','Slow cooker','Rice cooker','Grill / BBQ','Toaster'];
+const OB_PANTRY  = ['Rice','Pasta','Flour','Cooking oil','Salt & pepper','Common spices','Onions & garlic','Canned tomatoes','Canned beans/lentils','Soy sauce','Stock/broth','Sugar/sweetener'];
+const OB_BUDGET  = ['Under $100','$100–200','$200–300','$300+'];
+const OB_STORES_DEFAULT = ['Costco','Woolworths','Coles','Aldi','Indian grocery','Asian grocery','Butcher','Farmers market'];
+
+function newObState(){ return { onboarded:false, household:{adults:2,kids:0},
+  person:{ sex:'', age:'', heightCm:'', weightKg:'', activity:'' },
+  goals:[], calorieGoal:'', diet:'Omnivore', cuisines:[], allergies:[], allergiesOther:'', dislikes:'',
+  skill:'', gadgets:['Oven','Stovetop','Microwave'], pantry:[], budget:'', stores:[], referral:'' }; }
+let ob = newObState();
+
+/* Mifflin-St Jeor + activity + goal → suggested daily calories */
+function activityFactor(a){ return {'Sedentary':1.2,'Lightly active':1.375,'Moderately active':1.55,'Very active':1.725,'Athlete':1.9}[a]||1.375; }
+function suggestedCalories(){
+  const p=ob.person||{}; const age=+p.age, h=+p.heightCm, w=+p.weightKg;
+  if(!age||!h||!w) return null;
+  let bmr = 10*w + 6.25*h - 5*age + (p.sex==='Male'?5:(p.sex==='Female'?-161:-78));
+  let tdee = bmr*activityFactor(p.activity);
+  if(ob.goals.includes('Lose weight')) tdee*=0.8;
+  else if(ob.goals.includes('Build muscle')) tdee*=1.1;
+  return Math.max(1200, Math.round(tdee/50)*50);
+}
+
+/* ---- load profile + decide what to show ---- */
+async function loadProfileAndGate(){
+  const uid = session && session.user && session.user.id;
+  if(!uid) return;
+  try{
+    let {data:row} = await sb.from('profiles').select('*').eq('user_id',uid).maybeSingle();
+    if(!row){
+      const seed={ user_id:uid, data:newObState(), trial_start:new Date().toISOString(), subscription_status:'trialing' };
+      const {data:ins} = await sb.from('profiles').insert(seed).select('*').maybeSingle();
+      row = ins || seed;
+    }
+    profile = row;
+    if(!profile.data) profile.data = newObState();
+    const fn=localStorage.getItem(K_FIRST); if(fn && !profile.data.firstName){ profile.data.firstName=fn; saveProfileData(); }
+  }catch(e){ profile = { user_id:uid, data:newObState(), trial_start:new Date().toISOString(), subscription_status:'trialing' }; }
+
+  // returning from a Stripe checkout?
+  const qs = new URLSearchParams(location.search);
+  if(qs.get('checkout')==='success'){ history.replaceState(null,'',location.pathname); await pollSubscription(); }
+
+  if(!profile.data.onboarded){
+    if(window._pendingImport){ window._pendingImport=false; applyGate(); openImport(); }
+    else startOnboarding(false);
+  }
+  else { applyGate(); }
+}
+
+async function saveProfileData(){
+  if(!profile) return;
+  profile.data.updatedAt = Date.now();
+  try{ await sb.from('profiles').update({ data:profile.data, updated_at:new Date().toISOString() }).eq('user_id', profile.user_id); }catch(e){}
+}
+
+/* ---- trial / subscription gating ---- */
+function isSubscribed(){ return profile && profile.subscription_status==='active'; }
+function aiCredits(){ return (profile && +profile.ai_credits) || 0; }
+function aiPaid(){ return !!(profile && profile.ai_paid); }
+function canUseApp(){ return isSubscribed() || aiPaid(); }
+function canGenerate(){ return aiCredits()>0; }
+function applyGate(){
+  const bar=document.getElementById('trialbar');
+  if(canUseApp()){ document.getElementById('paywall').classList.remove('show'); bar.classList.remove('show'); }
+  else { bar.classList.remove('show'); openPaywall(true); }
+  updateAcctSub();
+}
+function updateAcctSub(){
+  const el=document.getElementById('acctSubLine'); if(!el||!profile) return;
+  if(isSubscribed()){ el.className='ask-msg ok'; el.textContent='✓ Larder — $5/month subscription active'; }
+  else if(aiPaid()){ el.className='ask-msg ok'; el.textContent='✓ AI plan unlocked'+(aiCredits()>0?(' · '+aiCredits()+' AI generation'+(aiCredits()>1?'s':'')+' available'):''); }
+  else { el.className='ask-msg'; el.textContent='Choose how to start to unlock Larder'; }
+}
+
+/* ---- paywall ---- */
+function renderPwPlans(){
+  const el=document.getElementById('pwPlans'); if(!el) return;
+  el.innerHTML=Object.values(PLANS).map(p=>`<div class="pw-plan ${selectedPlan===p.key?'on':''}" onclick="selectPlan('${p.key}')">${p.save?`<span class="save">${p.save}</span>`:''}<div class="pl">${p.label}</div><div class="amt">${p.amount}</div><div class="per">${esc(p.per)}</div></div>`).join('');
+  const note=document.getElementById('pwNote'); if(note) note.textContent=PLANS[selectedPlan].note;
+  const cta=document.getElementById('pwCta'); if(cta) cta.textContent=PLANS[selectedPlan].cta;
+}
+function selectPlan(k){ selectedPlan=k; renderPwPlans(); }
+function openPaywall(locked){
+  const pw=document.getElementById('paywall');
+  const ok=canUseApp();
+  document.getElementById('pwTitle').textContent = ok ? 'Larder Premium' : 'Choose how to start';
+  document.getElementById('pwSub').textContent = ok ? 'You’re all set — enjoy Larder.' : 'Let our AI build your plan, or bring your own for $5/month.';
+  const plansEl=document.getElementById('pwPlans'), cta=document.getElementById('pwCta');
+  if(ok){ plansEl.style.display='none'; cta.style.display='none'; document.getElementById('pwNote').textContent='Manage or cancel anytime — just contact us.'; }
+  else { plansEl.style.display='flex'; cta.style.display=''; cta.disabled=false; renderPwPlans(); }
+  pw.classList.add('show');
+  closeAcct&&closeAcct();
+}
+function closePaywallIfAllowed(){ if(hasAccess()) document.getElementById('paywall').classList.remove('show'); }
+async function startCheckout(){
+  const cta=document.getElementById('pwCta'); const orig=cta.textContent; cta.textContent='Opening secure checkout…'; cta.disabled=true;
+  try{
+    const {data:res,error}=await sb.functions.invoke('create-checkout',{ body:{ plan:selectedPlan, env: TEST_ENV?'test':'live', return_url: location.origin+location.pathname } });
+    if(error||!res||!res.url){ askInfo('Checkout not ready yet', (res&&res.error)||(error&&error.message)||'Payments aren’t fully set up yet. Please try again shortly.'); cta.textContent=orig; cta.disabled=false; return; }
+    location.href=res.url;
+  }catch(e){ askInfo('Checkout error','Please try again in a moment.'); cta.textContent=orig; cta.disabled=false; }
+}
+async function refreshSub(){
+  const note=document.getElementById('pwNote'); note.textContent='Checking your subscription…';
+  const ok=await pollSubscription(1);
+  note.textContent = ok ? '✓ Subscription active — enjoy Larder Premium!' : 'No active subscription found yet. If you just paid, wait a few seconds and try again.';
+  if(ok){ document.getElementById('paywall').classList.remove('show'); }
+}
+async function pollSubscription(tries){
+  tries=tries||6;
+  for(let i=0;i<tries;i++){
+    try{
+      const {data:row}=await sb.from('profiles').select('subscription_status,ai_credits,ai_paid').eq('user_id',profile.user_id).maybeSingle();
+      if(row){ profile.subscription_status=row.subscription_status; profile.ai_credits=row.ai_credits; profile.ai_paid=row.ai_paid; }
+      if(canUseApp()){ applyGate(); maybeAutoGenerate(); return true; }
+    }catch(e){}
+    if(i<tries-1) await new Promise(r=>setTimeout(r,2000));
+  }
+  applyGate(); return false;
+}
+function maybeAutoGenerate(){ if(profile && profile.data && profile.data.onboarded && canGenerate() && !(data.mealplan && data.mealplan.days && data.mealplan.days.length)){ generatePlan(); } }
+
+/* ---- onboarding wizard ---- */
+let obIndex=0;
+const OB_REFERRAL = ['TikTok','Instagram','Facebook','App Store','Google search','Friend or family','YouTube','Podcast','Other'];
+const OB_STEPS=[obStepAbout, obStepEnergy, obStepGoals, obStepDiet, obStepCuisine, obStepAllergies, obStepDislikes, obStepSkill, obStepGadgets, obStepPantry, obStepStores, obStepReferral];
+function startOnboarding(edit){
+  obEditMode=!!edit;
+  ob = edit && profile && profile.data ? JSON.parse(JSON.stringify(profile.data)) : newObState();
+  if(!ob.household) ob.household={adults:2,kids:0};
+  if(!Array.isArray(ob.cuisines)) ob.cuisines=[];
+  if(!Array.isArray(ob.goals)) ob.goals=[];
+  if(!Array.isArray(ob.stores)) ob.stores=[];
+  obIndex=0;
+  document.getElementById('authGate').classList.remove('show');
+  document.getElementById('obGate').classList.add('show');
+  renderOb();
+}
+function obStores(){ const s=[...OB_STORES_DEFAULT]; ob.stores.forEach(x=>{ if(!s.includes(x)) s.push(x); }); return s; }
+function chip(field, val, on){ return `<div class="chip ${on?'on':''}" data-f="${esc(field)}" data-v="${esc(val)}" onclick="obToggle(this)">${esc(val)}</div>`; }
+
+function obStepHousehold(){
+  return { title:'Who are we cooking for?', sub:'So portions and quantities are right for everyone at your table.',
+    html:`<div class="ob-label">Adults</div>
+      <div class="stepper"><button onclick="obStep('adults',-1)">−</button><span class="val" id="vAdults">${ob.household.adults}</span><button onclick="obStep('adults',1)">+</button><span class="lbl">grown-ups eating</span></div>
+      <div class="ob-label">Kids</div>
+      <div class="stepper"><button onclick="obStep('kids',-1)">−</button><span class="val" id="vKids">${ob.household.kids}</span><button onclick="obStep('kids',1)">+</button><span class="lbl">children eating</span></div>` };
+}
+function obStepAbout(){
+  const p=ob.person;
+  return { title:'About you', sub:'Used to calculate your energy needs and portion your meals. Just you — we tailor the main plan to you.',
+    html:`<div class="ob-label">Sex</div><div class="chips">${OB_SEX.map(s=>chip('sex',s, p.sex===s)).join('')}</div>
+      <div class="ob-label">Age</div><input class="ob-in" inputmode="numeric" placeholder="years" value="${esc(String(p.age||''))}" oninput="ob.person.age=this.value.replace(/[^0-9]/g,'')">
+      <div class="ob-label">Height</div><input class="ob-in" inputmode="numeric" placeholder="cm" value="${esc(String(p.heightCm||''))}" oninput="ob.person.heightCm=this.value.replace(/[^0-9]/g,'')">
+      <div class="ob-label">Current weight</div><input class="ob-in" inputmode="decimal" placeholder="kg" value="${esc(String(p.weightKg||''))}" oninput="ob.person.weightKg=this.value.replace(/[^0-9.]/g,'')">` };
+}
+function obStepEnergy(){
+  const p=ob.person; const sug=suggestedCalories();
+  let calHtml;
+  if(sug){
+    const opts=[sug-300, sug, sug+300].filter(x=>x>=1200);
+    calHtml=`<div class="ob-sub" style="margin-top:2px">Based on your details, we suggest about <b>${sug} kcal/day</b> for your goal. Adjust if you prefer.</div>
+      <div class="chips">${opts.map(o=>chip('calorieGoal', String(o), String(ob.calorieGoal)===String(o))).join('')}</div>
+      <div class="ob-label">Or set your own</div><input class="ob-in" inputmode="numeric" placeholder="kcal per day" value="${esc(String(ob.calorieGoal||''))}" oninput="ob.calorieGoal=this.value.replace(/[^0-9]/g,'')">`;
+  } else {
+    calHtml=`<div class="ob-sub" style="margin-top:2px">Pick your activity level above to see a suggested daily calorie target, or enter your own.</div>
+      <input class="ob-in" inputmode="numeric" placeholder="kcal per day (optional)" value="${esc(String(ob.calorieGoal||''))}" oninput="ob.calorieGoal=this.value.replace(/[^0-9]/g,'')">`;
+  }
+  return { title:'Activity & energy needs', sub:'How active are you day to day?',
+    html:`<div class="ob-label">Activity level</div><div class="chips">${OB_ACTIVITY.map(a=>chip('activity',a, p.activity===a)).join('')}</div>
+      <div class="ob-label">Daily calorie goal</div>${calHtml}` };
+}
+function obStepGoals(){
+  return { title:'What are your goals?', sub:'Pick everything that matters — your plan will optimise for these.',
+    html:`<div class="chips">${OB_GOALS.map(g=>chip('goals',g, ob.goals.includes(g))).join('')}</div>` };
+}
+function obStepDiet(){
+  return { title:'Food preferences', sub:'Pick the way of eating that fits you best.',
+    html:`<div class="chips">${OB_DIET.map(d=>chip('diet',d, ob.diet===d)).join('')}</div>` };
+}
+function obStepCuisine(){
+  return { title:'Cuisines you love', sub:'Choose a few — your weekly plan will lean into these.',
+    html:`<div class="chips">${OB_CUISINE.map(c=>chip('cuisines',c, ob.cuisines.includes(c))).join('')}</div>` };
+}
+function obStepAllergies(){
+  return { title:'Any allergies?', sub:'We’ll keep these out of every meal and your grocery list. Add anything else below.',
+    html:`<div class="chips">${OB_ALLERGENS.map(a=>chip('allergies',a, ob.allergies.includes(a))).join('')}</div>
+      <div class="ob-label">Other allergies</div>
+      <input class="ob-in" placeholder="e.g. kiwi, mustard" value="${esc(ob.allergiesOther||'')}" oninput="ob.allergiesOther=this.value">` };
+}
+function obStepDislikes(){
+  return { title:'Foods you dislike', sub:'Ingredients you’d rather never see. We’ll avoid them where we can.',
+    html:`<textarea class="ob-in" style="height:110px;resize:vertical;font-family:inherit" placeholder="e.g. mushrooms, olives, blue cheese, very spicy food" oninput="ob.dislikes=this.value">${esc(ob.dislikes||'')}</textarea>` };
+}
+function obStepSkill(){
+  return { title:'Your cooking level', sub:'So recipes match your confidence in the kitchen.',
+    html:`<div class="chips">${OB_SKILL.map(s=>chip('skill',s, ob.skill===s)).join('')}</div>
+      <div class="ob-sub" style="margin-top:14px">Beginner = simple, few steps · Advanced = happy with anything.</div>` };
+}
+function obStepGadgets(){
+  return { title:'Your kitchen gadgets', sub:'We’ll only suggest recipes you can actually make with what you have.',
+    html:`<div class="chips">${OB_GADGETS.map(g=>chip('gadgets',g, ob.gadgets.includes(g))).join('')}</div>` };
+}
+function obStepPantry(){
+  return { title:'What’s already in your pantry?', sub:'Staples you keep stocked — we’ll skip these on your shopping list.',
+    html:`<div class="chips">${OB_PANTRY.map(p=>chip('pantry',p, ob.pantry.includes(p))).join('')}</div>` };
+}
+function obStepStores(){
+  return { title:'Where do you shop?', sub:'Your grocery list gets auto-sorted into these exact stores. Add your own too.',
+    html:`<div class="chips">${obStores().map(s=>chip('stores',s, ob.stores.includes(s))).join('')}
+      <div class="chip add" onclick="obAddStore()">＋ Add a store</div></div>
+      <div class="ob-label">Weekly grocery budget (optional)</div>
+      <div class="chips">${OB_BUDGET.map(b=>chip('budget',b, ob.budget===b)).join('')}</div>` };
+}
+function obStepReferral(){
+  return { title:'How did you hear about us?', sub:'Last one — it helps us reach more home cooks like you.',
+    html:`<div class="chips">${OB_REFERRAL.map(r=>chip('referral',r, ob.referral===r)).join('')}</div>` };
+}
+function renderOb(){
+  const step=OB_STEPS[obIndex]();
+  document.getElementById('obProg').style.width=Math.round((obIndex)/(OB_STEPS.length)*100+ (100/OB_STEPS.length))+'%';
+  document.getElementById('obStepC').textContent='Step '+(obIndex+1)+' of '+OB_STEPS.length;
+  document.getElementById('obBody').innerHTML=`<div class="ob-h">${esc(step.title)}</div><div class="ob-sub">${esc(step.sub)}</div>${step.html}`;
+  const last=obIndex===OB_STEPS.length-1;
+  const back = obIndex>0 ? `<button class="btn" style="flex:.5" onclick="obBack()">Back</button>` : (obEditMode?`<button class="btn" style="flex:.5" onclick="obClose()">Cancel</button>`:'');
+  document.getElementById('obFoot').innerHTML = back + `<button class="btn primary" style="flex:1" onclick="obNext()">${last?(obEditMode?'Save & regenerate':'Create my plan ✨'):'Continue'}</button>`;
+}
+function obToggle(el){
+  const f=el.dataset.f, v=el.dataset.v;
+  if(f==='diet'||f==='skill'||f==='referral'){ ob[f]=v; }
+  else if(f==='sex'||f==='activity'){ ob.person[f]=v; }
+  else if(f==='budget'||f==='calorieGoal'){ ob[f] = String(ob[f])===String(v)?'':v; }
+  else { const arr=ob[f]; const i=arr.indexOf(v); if(i>=0)arr.splice(i,1); else arr.push(v); }
+  renderOb();
+}
+function obStep(k,d){ ob.household[k]=Math.max(k==='adults'?1:0, (ob.household[k]||0)+d); const el=document.getElementById(k==='adults'?'vAdults':'vKids'); if(el)el.textContent=ob.household[k]; }
+function obAddStore(){ askInput('Add a store','', v=>{ v=(v||'').trim(); if(!v)return; if(!ob.stores.includes(v))ob.stores.push(v); renderOb(); }, {placeholder:'e.g. Local greengrocer', okText:'Add'}); }
+function obBack(){ if(obIndex>0){ obIndex--; renderOb(); } }
+function obClose(){ document.getElementById('obGate').classList.remove('show'); if(profile&&profile.data.onboarded) applyGate(); }
+function obSkip(){
+  askConfirm('Skip setup for now?','You can generate a personalised plan or upload your own any time from the Meals tab.', ()=>{
+    if(profile){ profile.data = Object.assign({}, profile.data||{}, ob, {onboarded:true}); saveProfileData(); }
+    document.getElementById('obGate').classList.remove('show');
+    applyGate&&applyGate(); showTab('list');
+  });
+}
+function obNext(){
+  const cur=OB_STEPS[obIndex], p=ob.person;
+  if(cur===obStepAbout && (!p.sex||!p.age||!p.heightCm||!p.weightKg)){ askInfo('A few details needed','Please add your sex, age, height and weight so we can size your meals and energy needs.'); return; }
+  if(cur===obStepEnergy){ if(!p.activity){ askInfo('Pick your activity','Choose how active you are so we can set your calorie target.'); return; } if(!ob.calorieGoal){ const s=suggestedCalories(); if(s) ob.calorieGoal=s; } }
+  if(cur===obStepCuisine && ob.cuisines.length===0){ askInfo('Pick at least one','Choose one or more cuisines you enjoy so we can build a plan you’ll love.'); return; }
+  if(cur===obStepStores && ob.stores.length===0){ askInfo('Add a store','Select at least one place you shop so we can sort your grocery list.'); return; }
+  if(obIndex<OB_STEPS.length-1){ obIndex++; renderOb(); return; }
+  finishOnboarding();
+}
+async function finishOnboarding(){
+  ob.onboarded=true;
+  profile.data=JSON.parse(JSON.stringify(ob));
+  await saveProfileData();
+  if(canGenerate()){ await generatePlan(); }
+  else { document.getElementById('obGate').classList.remove('show'); selectedPlan='ai'; openPaywall(); }
+}
+
+/* ---- AI plan generation ---- */
+function obGenerating(msg){
+  document.getElementById('obGate').classList.add('show');
+  document.getElementById('obProg').style.width='100%';
+  document.getElementById('obStepC').textContent='Building your plan';
+  document.getElementById('obBody').innerHTML=`<div class="ob-gen"><div class="spin"></div><div class="ob-h" style="font-size:22px">${esc(msg||'Creating your week…')}</div><div class="ob-sub">Personalising meals, recipes and your grocery list. This takes a few seconds.</div></div>`;
+  document.getElementById('obFoot').innerHTML='';
+}
+async function generatePlan(){
+  obGenerating('Creating your week…');
+  try{
+    const {data:res,error}=await sb.functions.invoke('generate-plan',{ body:{ profile: profile.data } });
+    if(error || !res || !(Array.isArray(res.days)&&res.days.length)){
+      document.getElementById('obBody').innerHTML=`<div class="ob-gen"><div class="ob-h" style="font-size:22px">Couldn’t build the plan</div><div class="ob-sub">${esc((res&&res.error)||(error&&error.message)||'The planner isn’t fully set up yet.')}</div></div>`;
+      document.getElementById('obFoot').innerHTML=`<button class="btn" style="flex:.5" onclick="obClose()">Later</button><button class="btn primary" style="flex:1" onclick="generatePlan()">Try again</button>`;
+      return;
+    }
+    applyGenerated(res);
+    if(profile && aiCredits()>0){ profile.ai_credits=Math.max(0, aiCredits()-1); try{ await sb.from('profiles').update({ai_credits:profile.ai_credits}).eq('user_id',profile.user_id); }catch(e){} }
+    document.getElementById('obGate').classList.remove('show');
+    showTab('plan'); applyGate();
+  }catch(e){
+    document.getElementById('obFoot').innerHTML=`<button class="btn" style="flex:.5" onclick="obClose()">Later</button><button class="btn primary" style="flex:1" onclick="generatePlan()">Try again</button>`;
+  }
+}
+function regeneratePlan(){
+  if(!profile || !profile.data.onboarded){ startOnboarding(false); return; }
+  if(!canGenerate()){ selectedPlan='ai'; openPaywall(); return; }
+  askConfirm('Generate a new plan?','This uses one AI generation ($49.99 each) to build a fresh 7-day plan and grocery list from your saved preferences, replacing the current one.', ()=>generatePlan());
+}
+function editPrefs(){ closeAcct(); startOnboarding(true); }
+function storeEmoji(name){
+  const n=(name||'').toLowerCase();
+  if(n.includes('costco'))return '📦'; if(n.includes('cole'))return '🛒'; if(n.includes('wool'))return '🛒';
+  if(n.includes('aldi'))return '🛍️'; if(n.includes('indian'))return '🏪'; if(n.includes('asian'))return '🥢';
+  if(n.includes('butcher')||n.includes('meat'))return '🥩'; if(n.includes('farm')||n.includes('green')||n.includes('market'))return '🥬';
+  if(n.includes('fish')||n.includes('seafood'))return '🐟'; if(n.includes('bak'))return '🍞'; return '🛒';
+}
+function applyGenerated(mp){
+  mp.recipesMap={}; (mp.recipes||[]).forEach(r=>{ if(r&&r.name) mp.recipesMap[String(r.name).toLowerCase()]=r; });
+  data.mealplan=mp;
+  const userStores = (profile&&profile.data&&profile.data.stores&&profile.data.stores.length)? profile.data.stores : null;
+  const groups={}; const order=[];
+  (mp.shopping||[]).forEach(x=>{
+    let store = (x.store||'').trim();
+    if(userStores){ const hit=userStores.find(s=>s.toLowerCase()===store.toLowerCase()) || userStores.find(s=>store && (s.toLowerCase().includes(store.toLowerCase())||store.toLowerCase().includes(s.toLowerCase()))); store = hit || store; }
+    if(!store) store = userStores? userStores[userStores.length-1] : (x.section||'Other');
+    if(!groups[store]){ groups[store]=[]; order.push(store); }
+    const note=[x.note||'', x.section||''].filter(Boolean).join(' · ');
+    groups[store].push(it(x.name||'Item', note));
+  });
+  if(order.length){ data.stores = order.map(s=>({ id:'p'+uid(), name:storeEmoji(s)+' '+s, collapsed:false, items:groups[s] })); }
+  planDay=0; data.updatedAt=Date.now(); saveLocal(); render(); schedulePush();
+}
+
+/* ---- TEST build badge ---- */
+if(TEST_ENV){
+  try{ document.title='Larder · TEST'; }catch(e){}
+  const b=document.createElement('div'); b.id='testRibbon';
+  b.textContent='TEST BUILD — Stripe test mode';
+  b.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:200;background:#b4894c;color:#fff;font:600 12px "Inter",sans-serif;text-align:center;padding:6px 10px;letter-spacing:.3px;box-shadow:0 -2px 10px rgba(0,0,0,.15)';
+  window.addEventListener('DOMContentLoaded',()=>document.body.appendChild(b));
+  if(document.body) document.body.appendChild(b);
+}
+
+render();
+/* sync + login are started by the auth bootstrap above */
+if(!TEST_ENV && 'serviceWorker' in navigator){ window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{})); }
+</script>
+</body>
+</html>

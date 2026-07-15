@@ -1209,9 +1209,9 @@ const PLANS = {
   ai:  { key:'ai',  label:'AI builds my plan', amount:'$49.99', per:'one-time', save:'MOST POPULAR', mode:'payment',
          cta:'Generate my plan — $49.99',
          note:'Our AI builds a personalised weekly plan, recipes and store-sorted grocery list from your answers. One-time, per plan.' },
-  byo: { key:'byo', label:'I have my own plan', amount:'$5', per:'/ month', save:'', mode:'subscription',
-         cta:'Subscribe — $5/month',
-         note:'Already have a plan? Upload it and use every tool — checklist, recipes, prep, receipts and sharing. $5/month, cancel anytime.' }
+  byo: { key:'byo', label:'I have my own plan', amount:'$5', per:'/ month', save:'7-DAY FREE TRIAL', mode:'subscription',
+         cta:'Start 7-day free trial',
+         note:'Free for 7 days, then $5/month automatically — cancel anytime. Upload your own plan and use every tool.' }
 };
 let selectedPlan = 'ai';
 let profile = null;            // { user_id, data:{...answers}, trial_start, subscription_status, stripe_customer_id }

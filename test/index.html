@@ -512,7 +512,7 @@
     <h2 id="pwTitle">Start your free trial</h2>
     <div class="pw-sub" id="pwSub">Everything you need to plan, shop &amp; cook the week.</div>
     <div class="pw-plans" id="pwPlans"></div>
-    <button class="btn gold" style="width:100%;padding:16px;font-size:15px" id="pwCta" onclick="startCheckout()">Start free trial</button>
+    <button class="btn gold" style="width:100%;padding:16px;font-size:15px" id="pwCta" onclick="pwPrimary()">Start 7-day free trial — free</button>
     <div class="pw-note" id="pwNote" style="margin-top:10px"></div>
     <div class="pw-links">
       <span onclick="refreshSub()">Restore</span>
@@ -1281,21 +1281,45 @@ async function saveProfileData(){
 }
 
 /* ---- trial / subscription gating ---- */
+const TRIAL_MS = 7*86400000;
 function isSubscribed(){ return profile && profile.subscription_status==='active'; }
 function aiCredits(){ return (profile && +profile.ai_credits) || 0; }
 function aiPaid(){ return !!(profile && profile.ai_paid); }
-function canUseApp(){ return isSubscribed() || aiPaid(); }
-function canGenerate(){ return aiCredits()>0; }
+function trialStarted(){ return !!(profile && profile.data && profile.data.trial_started); }
+function trialEndsMs(){ return (profile && profile.data && profile.data.trial_start_ms || 0) + TRIAL_MS; }
+function trialActive(){ return trialStarted() && Date.now() < trialEndsMs(); }
+function trialDaysLeft(){ return Math.max(0, Math.ceil((trialEndsMs()-Date.now())/86400000)); }
+function canUseApp(){ return isSubscribed() || aiPaid() || trialActive(); }
+function canGenerate(){ return aiCredits()>0 || trialActive(); }
 function applyGate(){
   const bar=document.getElementById('trialbar');
-  if(canUseApp()){ document.getElementById('paywall').classList.remove('show'); bar.classList.remove('show'); }
-  else { bar.classList.remove('show'); openPaywall(true); }
+  if(canUseApp()){
+    document.getElementById('paywall').classList.remove('show');
+    if(trialActive() && !isSubscribed() && !aiPaid()){
+      const d=trialDaysLeft();
+      document.getElementById('trialText').textContent = d<=1 ? 'Free trial ends today' : ('Free trial · '+d+' days left');
+      bar.classList.add('show');
+    } else bar.classList.remove('show');
+  } else { bar.classList.remove('show'); openPaywall(true); }
   updateAcctSub();
 }
+async function startFreeTrial(){
+  if(!profile) return;
+  profile.data.trial_started=true;
+  profile.data.trial_start_ms=Date.now();
+  profile.data.selectedPlan=selectedPlan;
+  await saveProfileData();
+  document.getElementById('paywall').classList.remove('show');
+  applyGate();
+  if(profile.data.onboarded && !(data.mealplan && data.mealplan.days && data.mealplan.days.length)) generatePlan();
+  else showTab('plan');
+}
+function pwPrimary(){ if(!canUseApp() && !trialStarted()) startFreeTrial(); else startCheckout(); }
 function updateAcctSub(){
   const el=document.getElementById('acctSubLine'); if(!el||!profile) return;
   if(isSubscribed()){ el.className='ask-msg ok'; el.textContent='✓ Larder — $5/month subscription active'; }
   else if(aiPaid()){ el.className='ask-msg ok'; el.textContent='✓ AI plan unlocked'+(aiCredits()>0?(' · '+aiCredits()+' AI generation'+(aiCredits()>1?'s':'')+' available'):''); }
+  else if(trialActive()){ el.className='ask-msg ok'; el.textContent='✓ Free trial — '+trialDaysLeft()+' day'+(trialDaysLeft()===1?'':'s')+' left'; }
   else { el.className='ask-msg'; el.textContent='Choose how to start to unlock Larder'; }
 }
 
@@ -1303,17 +1327,23 @@ function updateAcctSub(){
 function renderPwPlans(){
   const el=document.getElementById('pwPlans'); if(!el) return;
   el.innerHTML=Object.values(PLANS).map(p=>`<div class="pw-plan ${selectedPlan===p.key?'on':''}" onclick="selectPlan('${p.key}')">${p.save?`<span class="save">${p.save}</span>`:''}<div class="pl">${p.label}</div><div class="amt">${p.amount}</div><div class="per">${esc(p.per)}</div></div>`).join('');
-  const note=document.getElementById('pwNote'); if(note) note.textContent=PLANS[selectedPlan].note;
-  const cta=document.getElementById('pwCta'); if(cta) cta.textContent=PLANS[selectedPlan].cta;
+  const note=document.getElementById('pwNote'), cta=document.getElementById('pwCta');
+  if(!trialStarted()){
+    if(cta) cta.textContent='Start 7-day free trial — free';
+    if(note) note.textContent='Try everything free for 7 days — no card needed. After that, continue on your selected plan.';
+  } else {
+    if(cta) cta.textContent=PLANS[selectedPlan].cta;
+    if(note) note.textContent=PLANS[selectedPlan].note;
+  }
 }
 function selectPlan(k){ selectedPlan=k; renderPwPlans(); }
 function openPaywall(locked){
   const pw=document.getElementById('paywall');
-  const ok=canUseApp();
-  document.getElementById('pwTitle').textContent = ok ? 'Larder Premium' : 'Choose how to start';
-  document.getElementById('pwSub').textContent = ok ? 'You’re all set — enjoy Larder.' : 'Let our AI build your plan, or bring your own for $5/month.';
+  const paid=isSubscribed()||aiPaid();
+  document.getElementById('pwTitle').textContent = paid ? 'Larder Premium' : (trialActive() ? 'Upgrade your plan' : (locked ? 'Your free trial has ended' : 'Choose how to start'));
+  document.getElementById('pwSub').textContent = paid ? 'You’re all set — enjoy Larder.' : (trialActive() ? 'You’re on the free trial — pick a plan to keep going after it ends.' : 'Let our AI build your plan, or bring your own for $5/month.');
   const plansEl=document.getElementById('pwPlans'), cta=document.getElementById('pwCta');
-  if(ok){ plansEl.style.display='none'; cta.style.display='none'; document.getElementById('pwNote').textContent='Manage or cancel anytime — just contact us.'; }
+  if(paid){ plansEl.style.display='none'; cta.style.display='none'; document.getElementById('pwNote').textContent='Manage or cancel anytime — just contact us.'; }
   else { plansEl.style.display='flex'; cta.style.display=''; cta.disabled=false; renderPwPlans(); }
   pw.classList.add('show');
   closeAcct&&closeAcct();

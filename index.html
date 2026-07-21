@@ -332,6 +332,7 @@
 
 <div class="tabs">
   <div class="tab active" id="tab-list" onclick="showTab('list')">Shop</div>
+  <div class="tab" id="tab-buy" onclick="showTab('buy')">Lists</div>
   <div class="tab" id="tab-plan" onclick="showTab('plan')">Meals</div>
   <div class="tab" id="tab-prep" onclick="showTab('prep')">Prep</div>
   <div class="tab" id="tab-log" onclick="showTab('log')">Log</div>
@@ -347,6 +348,7 @@
 <main>
   <div id="view-list"></div>
   <button class="addstore" onclick="addStore()">＋ Add section</button>
+  <div id="view-buy" class="hidden"></div>
   <div id="view-plan" class="hidden"></div>
   <div id="view-prep" class="hidden"></div>
   <div id="view-log" class="hidden"></div>
@@ -811,6 +813,7 @@ function render(){
   const list=document.getElementById('view-list'); list.innerHTML='';
   let total=0, done=0;
   data.stores.forEach(store=>{
+    if(KEEP_SECTIONS.some(k=>k.id===store.id)) return; // these live in the Lists tab
     let sDone=0;
     store.items.forEach(x=>{ total++; if(x.done){ done++; sDone++; } });
     const shown = searchQ ? store.items.filter(x=>(x.n+' '+(x.d||'')).toLowerCase().includes(searchQ)) : store.items;
@@ -844,7 +847,25 @@ function render(){
   const pct = total? Math.round(done/total*100):0;
   document.getElementById('progfill').style.width=pct+'%';
   document.getElementById('progtext').textContent=`${done} of ${total} done · ${pct}%`;
+  renderBuy();
   renderLog();
+}
+function renderBuy(){
+  const v=document.getElementById('view-buy'); if(!v) return; v.innerHTML='';
+  v.innerHTML='<div class="prep-intro">Your running lists — things you keep thinking of and what to buy in the coming months. Shared with your household, separate from the weekly shop.</div>';
+  KEEP_SECTIONS.forEach(k=>{
+    const store=(data.stores||[]).find(s=>s.id===k.id) || {id:k.id, name:k.name, items:[]};
+    const items=(store.items||[]).map(x=>`<div class="item ${x.done?'done':''}">
+        <div class="box" onclick="toggle('${store.id}','${x.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+        <div class="txt" onclick="renameItem('${store.id}','${x.id}')"><div class="name">${esc(x.n)}</div>${x.d?`<div class="note">${esc(x.d)}</div>`:''}</div>
+        <div class="del-item" style="display:block" onclick="delItem('${store.id}','${x.id}')">✕</div>
+      </div>`).join('');
+    v.innerHTML += `<div class="store">
+      <div class="store-head"><div class="store-title" style="flex:1">${esc(store.name)}</div><span class="store-count">${(store.items||[]).length}</span></div>
+      <div class="items">${items||'<div class="item"><div class="txt note">Nothing here yet — add something below.</div></div>'}</div>
+      <div class="additem" style="display:flex"><input placeholder="Add an item…" onkeydown="if(event.key==='Enter')addItem('${store.id}',this)"><button onclick="addItem('${store.id}',this.previousElementSibling)">Add</button></div>
+    </div>`;
+  });
 }
 function esc(s){ return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
@@ -1009,7 +1030,7 @@ function showColes(names, label){
 function closeColes(){ document.getElementById('colesModal').classList.remove('show'); }
 function copyColes(){ navigator.clipboard.writeText(_colesNames.join('\n')).then(()=>{ const b=document.querySelector('.coles-copy'); if(b){ b.textContent='Copied ✓'; setTimeout(()=>b.textContent='📋 Copy list',1500); } }); }
 function showTab(t){
-  ['list','plan','prep','log'].forEach(x=>{
+  ['list','buy','plan','prep','log'].forEach(x=>{
     document.getElementById('tab-'+x).classList.toggle('active',t===x);
     document.getElementById('view-'+x).classList.toggle('hidden',t!==x);
   });
@@ -1018,6 +1039,7 @@ function showTab(t){
   document.querySelectorAll('.toolbar').forEach(el=>el.classList.toggle('hidden',t!=='list'));
   if(t==='plan') renderPlan();
   if(t==='prep') renderPrep();
+  if(t==='buy') renderBuy();
 }
 let searchQ='';
 function doSearch(v){ searchQ=(v||'').trim().toLowerCase(); document.getElementById('searchbar').classList.toggle('has',!!searchQ); render(); }

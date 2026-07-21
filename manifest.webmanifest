@@ -1,6 +1,6 @@
 {
-  "name": "Larder — meal plan & grocery",
-  "short_name": "Larder",
+  "name": "Home App — meal plan & grocery",
+  "short_name": "Home App",
   "description": "Your personalised weekly meal plan, recipes, prep guide and a smart grocery list sorted by the stores you shop at.",
   "start_url": "./",
   "scope": "./",

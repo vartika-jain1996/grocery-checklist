@@ -596,8 +596,11 @@ const KEEP_SECTIONS = [ {id:'needlist', name:'🛍️ Things we need to buy'}, {
 function ensureSections(s){ if(!s||!s.stores) return; KEEP_SECTIONS.forEach(k=>{ if(!s.stores.some(x=>x.id===k.id)) s.stores.push({id:k.id, name:k.name, collapsed:false, items:[]}); }); }
 function keepStore(k){ const s=(data.stores||[]).find(x=>x.id===k.id); return s ? JSON.parse(JSON.stringify(s)) : {id:k.id, name:k.name, collapsed:false, items:[]}; }
 function preservedStores(){ return KEEP_SECTIONS.map(keepStore); }
+function monthKey(d){ d=d||new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+function monthLabel(k){ const p=(k||'').split('-'); return new Date(+p[0], (+p[1]||1)-1, 1).toLocaleDateString(undefined,{month:'long',year:'numeric'}); }
+function ensureExtras(s){ if(!s) return; if(!s.bought||typeof s.bought!=='object') s.bought={}; if(!s.monthly||typeof s.monthly!=='object') s.monthly={periodKey:monthKey(), tasks:[], history:{}}; if(!Array.isArray(s.monthly.tasks)) s.monthly.tasks=[]; if(!s.monthly.history||typeof s.monthly.history!=='object') s.monthly.history={}; if(!s.monthly.periodKey) s.monthly.periodKey=monthKey(); }
 let data = load();
-function load(){ try{ const s=JSON.parse(localStorage.getItem(LKEY)); if(s&&s.stores){ if(!s.submissions) s.submissions=[]; ensureSections(s); return s; } }catch(e){} return JSON.parse(JSON.stringify(SEED)); }
+function load(){ let s=null; try{ s=JSON.parse(localStorage.getItem(LKEY)); }catch(e){} if(!(s&&s.stores)) s=JSON.parse(JSON.stringify(SEED)); if(!s.submissions) s.submissions=[]; ensureSections(s); ensureExtras(s); return s; }
 function saveLocal(){ data.updatedAt=Date.now(); localStorage.setItem(LKEY, JSON.stringify(data)); }
 
 const sb = window.supabase.createClient(SUPA_URL, SUPA_KEY, {auth:{persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, storageKey: TEST_ENV?'sb-larder-test':undefined}});
@@ -612,7 +615,7 @@ function adoptRemote(remote){
   if(!remote || !remote.stores) return false;
   if((remote.updatedAt||0) > (data.updatedAt||0)){
     if(!remote.submissions) remote.submissions=[];
-    ensureSections(remote);
+    ensureSections(remote); ensureExtras(remote);
     data = remote; localStorage.setItem(LKEY, JSON.stringify(data)); render(); return true;
   }
   return false;
@@ -851,22 +854,70 @@ function render(){
   renderLog();
 }
 function renderBuy(){
-  const v=document.getElementById('view-buy'); if(!v) return; v.innerHTML='';
-  v.innerHTML='<div class="prep-intro">Your running lists — things you keep thinking of and what to buy in the coming months. Shared with your household, separate from the weekly shop.</div>';
+  const v=document.getElementById('view-buy'); if(!v) return;
+  ensureExtras(data); rolloverMonthly();
+  let html='<div class="prep-intro">Your running lists and monthly tasks — shared with your household. Tick an item once you’ve bought it to move it into this month’s history.</div>';
   KEEP_SECTIONS.forEach(k=>{
     const store=(data.stores||[]).find(s=>s.id===k.id) || {id:k.id, name:k.name, items:[]};
-    const items=(store.items||[]).map(x=>`<div class="item ${x.done?'done':''}">
-        <div class="box" onclick="toggle('${store.id}','${x.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+    const items=(store.items||[]).map(x=>`<div class="item">
+        <div class="box" onclick="buyItem('${store.id}','${x.id}')" title="Mark as bought"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
         <div class="txt" onclick="renameItem('${store.id}','${x.id}')"><div class="name">${esc(x.n)}</div>${x.d?`<div class="note">${esc(x.d)}</div>`:''}</div>
         <div class="del-item" style="display:block" onclick="delItem('${store.id}','${x.id}')">✕</div>
       </div>`).join('');
-    v.innerHTML += `<div class="store">
+    html += `<div class="store">
       <div class="store-head"><div class="store-title" style="flex:1">${esc(store.name)}</div><span class="store-count">${(store.items||[]).length}</span></div>
       <div class="items">${items||'<div class="item"><div class="txt note">Nothing here yet — add something below.</div></div>'}</div>
       <div class="additem" style="display:flex"><input placeholder="Add an item…" onkeydown="if(event.key==='Enter')addItem('${store.id}',this)"><button onclick="addItem('${store.id}',this.previousElementSibling)">Add</button></div>
     </div>`;
   });
+  // Monthly checklist (recurring)
+  const m=data.monthly; const doneCount=(m.tasks||[]).filter(t=>t.done).length;
+  const tasks=(m.tasks||[]).map(t=>`<div class="item ${t.done?'done':''}">
+      <div class="box" onclick="toggleMonthly('${t.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+      <div class="txt"><div class="name">${esc(t.n)}</div>${t.done?`<div class="stamp">✓ Done ${fmtDate(t.ts)}</div>`:''}</div>
+      <div class="del-item" style="display:block" onclick="delMonthlyTask('${t.id}')">✕</div>
+    </div>`).join('');
+  html += `<div class="store">
+    <div class="store-head"><div class="store-title" style="flex:1">📅 Monthly checklist · ${esc(monthLabel(m.periodKey))}</div><span class="store-count">${doneCount}/${(m.tasks||[]).length}</span></div>
+    <div class="items">${tasks||'<div class="item"><div class="txt note">Add tasks that repeat every month (they reset on the 1st).</div></div>'}</div>
+    <div class="additem" style="display:flex"><input placeholder="Add a monthly task…" onkeydown="if(event.key==='Enter')addMonthlyTask(this)"><button onclick="addMonthlyTask(this.previousElementSibling)">Add</button></div>
+  </div>`;
+  html += renderHistoryHTML();
+  v.innerHTML=html;
 }
+function renderHistoryHTML(){
+  const bought=data.bought||{}; const mh=(data.monthly&&data.monthly.history)||{};
+  const keys=[...new Set([...Object.keys(bought), ...Object.keys(mh)])].filter(k=>(bought[k]&&bought[k].length)||(mh[k]&&mh[k].length)).sort().reverse();
+  if(!keys.length) return '<div class="footnote">No history yet. Items you tick as bought — and each month’s completed tasks — get archived here, month by month.</div>';
+  let h='<div class="ed-title" style="margin:20px 2px 4px;font-size:15px">📚 History</div>';
+  keys.forEach(k=>{
+    const b=bought[k]||[], t=mh[k]||[];
+    h+=`<div class="day"><div class="day-head"><span>${esc(monthLabel(k))}</span><span>${b.length} bought · ${t.length} done</span></div>`;
+    b.forEach(x=>{ h+=`<div class="day-item"><span>🛍️ ${esc(x.name)}</span><span class="st">${fmtDate(x.ts)}</span></div>`; });
+    t.forEach(x=>{ h+=`<div class="day-item"><span>✅ ${esc(x.name)}</span><span class="st">${fmtDate(x.ts)}</span></div>`; });
+    h+='</div>';
+  });
+  return h;
+}
+function rolloverMonthly(){
+  const m=data.monthly; if(!m) return; const cur=monthKey();
+  if(m.periodKey!==cur){
+    const done=(m.tasks||[]).filter(t=>t.done).map(t=>({name:t.n, ts:t.ts||Date.now()}));
+    if(done.length){ m.history=m.history||{}; m.history[m.periodKey]=(m.history[m.periodKey]||[]).concat(done); }
+    (m.tasks||[]).forEach(t=>{ t.done=false; t.ts=0; });
+    m.periodKey=cur; saveLocal(); schedulePush();
+  }
+}
+function buyItem(sid,iid){
+  const s=findStore(sid); if(!s) return; const x=(s.items||[]).find(i=>i.id===iid); if(!x) return;
+  const k=monthKey(); data.bought=data.bought||{}; data.bought[k]=data.bought[k]||[];
+  data.bought[k].unshift({name:x.n, note:x.d||'', ts:Date.now(), from:s.name});
+  s.items=s.items.filter(i=>i.id!==iid);
+  saveLocal(); render(); schedulePush();
+}
+function addMonthlyTask(input){ const val=(input.value||'').trim(); if(!val) return; ensureExtras(data); data.monthly.tasks.push({id:uid(), n:val, done:false, ts:0}); input.value=''; saveLocal(); render(); schedulePush(); }
+function toggleMonthly(id){ const t=(data.monthly.tasks||[]).find(x=>x.id===id); if(!t) return; t.done=!t.done; t.ts=t.done?Date.now():0; saveLocal(); render(); schedulePush(); }
+function delMonthlyTask(id){ data.monthly.tasks=(data.monthly.tasks||[]).filter(x=>x.id!==id); saveLocal(); render(); schedulePush(); }
 function esc(s){ return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
 function renderLog(){

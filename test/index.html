@@ -1317,7 +1317,7 @@ function applyGate(){
   const bar=document.getElementById('trialbar');
   if(canUseApp()){
     document.getElementById('paywall').classList.remove('show');
-    if(trialActive() && !isSubscribed() && !aiPaid()){
+    if(TEST_ENV && trialActive() && !isSubscribed() && !aiPaid()){
       const d=trialDaysLeft();
       document.getElementById('trialText').textContent = d<=1 ? 'Free trial ends today' : ('Free trial · '+d+' days left');
       bar.classList.add('show');

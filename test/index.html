@@ -398,6 +398,17 @@
   </div>
 </div>
 
+<div id="lockGate" class="auth-gate" style="z-index:9999">
+  <div class="auth-card">
+    <div class="auth-logo"><span class="mk">🏠</span></div>
+    <h2>Home App</h2>
+    <p class="auth-sub">Enter your passcode to continue</p>
+    <input id="lockPin" type="tel" inputmode="numeric" maxlength="8" class="pin-in" placeholder="••••" onkeydown="if(event.key==='Enter')tryUnlock()">
+    <div id="lockErr" class="pin-err"></div>
+    <button class="btn primary" style="width:100%;margin-top:12px" onclick="tryUnlock()">Unlock</button>
+  </div>
+</div>
+
 <div id="welcome" class="welcome">
   <div class="wc-top">
     <div class="wc-logo"><span class="mk">🏠</span><span class="nm">Home App</span></div>
@@ -537,6 +548,8 @@
 const SUPA_URL = "https://utcsxenvsnuywojtonll.supabase.co";
 const SUPA_KEY = "sb_publishable_EIU5NMbeUTy0mdhUQLP3Ug_jGTPiMki";
 const EDIT_CODE = "2580";  // code required to unlock Edit mode
+const APP_PASSCODE = "4242";                                   // passcode to open the app
+const HOUSEHOLD_LIST_ID = "8f7c1a2b-4d5e-4a6f-8b90-0d1e2f3a4b5c"; // shared household list (prod)
 /* ===================================== */
 
 /* ---- Build environment: TEST (/test/ path) vs PROD (root) ---- */
@@ -571,15 +584,18 @@ const SEED = { updatedAt:0, submissions:[], stores:[
   { id:"e", name:"🧻 Essentials", collapsed:false, items:[
     it("Tissue box (square)","Coles"), it("Toilet paper","Costco") ]},
   { id:"needlist", name:"🛍️ Things we need to buy", collapsed:false, items:[] },
+  { id:"upcoming", name:"🗓️ Buy in coming months", collapsed:false, items:[] },
 ]};
 
 function uid(){ return Math.random().toString(36).slice(2,9); }
 function it(n,d){ return {id:uid(), n:n, d:d||"", done:false, ts:0}; }
 
-function ensureNeedlist(s){ if(s&&s.stores&&!s.stores.some(x=>x.id==='needlist')) s.stores.push({id:'needlist', name:'🛍️ Things we need to buy', collapsed:false, items:[]}); }
-function needlistStore(){ const s=(data.stores||[]).find(x=>x.id==='needlist'); return s ? JSON.parse(JSON.stringify(s)) : {id:'needlist', name:'🛍️ Things we need to buy', collapsed:false, items:[]}; }
+const KEEP_SECTIONS = [ {id:'needlist', name:'🛍️ Things we need to buy'}, {id:'upcoming', name:'🗓️ Buy in coming months'} ];
+function ensureSections(s){ if(!s||!s.stores) return; KEEP_SECTIONS.forEach(k=>{ if(!s.stores.some(x=>x.id===k.id)) s.stores.push({id:k.id, name:k.name, collapsed:false, items:[]}); }); }
+function keepStore(k){ const s=(data.stores||[]).find(x=>x.id===k.id); return s ? JSON.parse(JSON.stringify(s)) : {id:k.id, name:k.name, collapsed:false, items:[]}; }
+function preservedStores(){ return KEEP_SECTIONS.map(keepStore); }
 let data = load();
-function load(){ try{ const s=JSON.parse(localStorage.getItem(LKEY)); if(s&&s.stores){ if(!s.submissions) s.submissions=[]; ensureNeedlist(s); return s; } }catch(e){} return JSON.parse(JSON.stringify(SEED)); }
+function load(){ try{ const s=JSON.parse(localStorage.getItem(LKEY)); if(s&&s.stores){ if(!s.submissions) s.submissions=[]; ensureSections(s); return s; } }catch(e){} return JSON.parse(JSON.stringify(SEED)); }
 function saveLocal(){ data.updatedAt=Date.now(); localStorage.setItem(LKEY, JSON.stringify(data)); }
 
 const sb = window.supabase.createClient(SUPA_URL, SUPA_KEY, {auth:{persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, storageKey: TEST_ENV?'sb-larder-test':undefined}});
@@ -594,7 +610,7 @@ function adoptRemote(remote){
   if(!remote || !remote.stores) return false;
   if((remote.updatedAt||0) > (data.updatedAt||0)){
     if(!remote.submissions) remote.submissions=[];
-    ensureNeedlist(remote);
+    ensureSections(remote);
     data = remote; localStorage.setItem(LKEY, JSON.stringify(data)); render(); return true;
   }
   return false;
@@ -628,6 +644,17 @@ async function afterLogin(){
   document.getElementById('welcome').classList.remove('show');
   document.getElementById('acctBtn').style.display='';
   try{
+    // PROD: everyone shares ONE household list, so you and your partner see the same data
+    if(!TEST_ENV){
+      const HID=HOUSEHOLD_LIST_ID;
+      try{ const {data:row}=await sb.from('lists').select('id').eq('id',HID).maybeSingle(); if(!row){ const seed=JSON.parse(JSON.stringify(SEED)); seed.updatedAt=Date.now(); await sb.from('lists').insert({id:HID, data:seed}); } }catch(e){}
+      try{ await sb.from('list_access').insert({list_id:HID}); }catch(e){}
+      activeListId=HID; localStorage.setItem(K_ACTIVE, HID); cloudOn=true;
+      await pull(); render();
+      if(!window._syncInt){ window._syncInt=setInterval(pull,5000); document.addEventListener('visibilitychange',()=>{ if(!document.hidden) pull(); }); }
+      await loadProfileAndGate();
+      return;
+    }
     // accept any pending email invites addressed to this account
     let invitedListId=null;
     try{
@@ -955,7 +982,7 @@ function applyScannedItems(items){
     const note=[ (x.qty && String(x.qty)!=='1') ? String(x.qty) : '', (x.price!=null && x.price!=='') ? ('$'+x.price) : '' ].filter(Boolean).join(' · ');
     return it(String(x.name||'Item'), note);
   });
-  data.stores = [{ id:'r'+uid(), name:'🧾 From receipt', collapsed:false, items: secItems }, needlistStore()];
+  data.stores = [{ id:'r'+uid(), name:'🧾 From receipt', collapsed:false, items: secItems }, ...preservedStores()];
   data.updatedAt = Date.now();
   localStorage.setItem(LKEY, JSON.stringify(data));
   render(); schedulePush(); setSync('Synced ✓'); showTab('list');
@@ -1167,7 +1194,7 @@ function applyMealplan(mp){
   data.mealplan=mp;
   const groups={}; (mp.shopping||[]).forEach(x=>{ const sec=((x.section||'Other')+'').trim()||'Other'; (groups[sec]=groups[sec]||[]).push(it(x.name||'Item', x.note||'')); });
   const emo=s=>({'Produce':'🥬','Dairy & eggs':'🥚','Dairy':'🥚','Meat & protein':'🍗','Meat':'🍗','Pantry':'🫙','Frozen':'❄️','Spices':'🌶️','Bakery':'🍞','Drinks':'🥤','Other':'🛒'}[s]||'🛒');
-  if(Object.keys(groups).length){ const keep=needlistStore(); data.stores=Object.keys(groups).map(sec=>({id:'m'+uid(), name:emo(sec)+' '+sec, collapsed:false, items:groups[sec]})); data.stores.push(keep); }
+  if(Object.keys(groups).length){ const keep=preservedStores(); data.stores=Object.keys(groups).map(sec=>({id:'m'+uid(), name:emo(sec)+' '+sec, collapsed:false, items:groups[sec]})); data.stores.push(...keep); }
   planDay=0; data.updatedAt=Date.now(); saveLocal(); render(); schedulePush(); showTab('plan');
 }
 
@@ -1291,7 +1318,8 @@ async function loadProfileAndGate(){
 
   if(!profile.data.onboarded){
     if(window._pendingImport){ window._pendingImport=false; applyGate(); openImport(); }
-    else startOnboarding(false);
+    else if(TEST_ENV){ startOnboarding(false); }
+    else { applyGate(); }   // prod: no forced onboarding — go straight in
   }
   else { applyGate(); }
 }
@@ -1591,7 +1619,7 @@ function applyGenerated(mp){
     const note=[x.note||'', x.section||''].filter(Boolean).join(' · ');
     groups[store].push(it(x.name||'Item', note));
   });
-  if(order.length){ const keep=needlistStore(); data.stores = order.map(s=>({ id:'p'+uid(), name:storeEmoji(s)+' '+s, collapsed:false, items:groups[s] })); data.stores.push(keep); }
+  if(order.length){ const keep=preservedStores(); data.stores = order.map(s=>({ id:'p'+uid(), name:storeEmoji(s)+' '+s, collapsed:false, items:groups[s] })); data.stores.push(...keep); }
   planDay=0; data.updatedAt=Date.now(); saveLocal(); render(); schedulePush();
 }
 
@@ -1604,6 +1632,15 @@ if(TEST_ENV){
   window.addEventListener('DOMContentLoaded',()=>document.body.appendChild(b));
   if(document.body) document.body.appendChild(b);
 }
+
+/* ---- App passcode gate ---- */
+function showLock(){ const g=document.getElementById('lockGate'); if(!g) return; g.classList.add('show'); setTimeout(()=>{ const i=document.getElementById('lockPin'); if(i) i.focus(); },80); }
+function tryUnlock(){
+  const v=(document.getElementById('lockPin').value||'').trim();
+  if(v===APP_PASSCODE){ localStorage.setItem('app_unlocked','1'); document.getElementById('lockGate').classList.remove('show'); }
+  else { document.getElementById('lockErr').textContent='Wrong passcode — try again.'; const i=document.getElementById('lockPin'); i.value=''; i.focus(); }
+}
+if(localStorage.getItem('app_unlocked')!=='1') showLock();
 
 render();
 /* sync + login are started by the auth bootstrap above */

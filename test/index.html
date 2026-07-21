@@ -7,14 +7,14 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Larder">
+<meta name="apple-mobile-web-app-title" content="Home App">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="favicon-32.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<title>Larder — weekly meal &amp; grocery planner</title>
+<title>Home App — weekly meal &amp; grocery planner</title>
 <style>
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   :root{
@@ -313,7 +313,7 @@
 <div class="topbar">
 <header>
   <div class="titlerow">
-    <div class="brandmark"><span class="mark">🌿</span><h1>Larder</h1></div>
+    <div class="brandmark"><span class="mark">🏠</span><h1>Home App</h1></div>
     <div style="display:flex;align-items:center;gap:8px">
       <span class="sync" id="sync">…</span>
       <button id="acctBtn" class="acct-btn" onclick="openAcct()" style="display:none" title="Account">👤</button>
@@ -400,7 +400,7 @@
 
 <div id="welcome" class="welcome">
   <div class="wc-top">
-    <div class="wc-logo"><span class="mk">🌿</span><span class="nm">Larder</span></div>
+    <div class="wc-logo"><span class="mk">🏠</span><span class="nm">Home App</span></div>
     <div class="wc-feat"><span class="ck">✓</span> Plan</div>
     <div class="wc-feat"><span class="ck">✓</span> Shop</div>
     <div class="wc-feat"><span class="ck">✓</span> Cook</div>
@@ -418,7 +418,7 @@
 
 <div id="authGate" class="auth-gate">
   <div class="auth-card">
-    <div class="auth-logo"><span class="mk">🌿</span></div>
+    <div class="auth-logo"><span class="mk">🏠</span></div>
     <h2 id="authTitle">Create your account</h2>
     <p class="auth-sub" id="authSub">Save your plan and sync it across every device.</p>
     <input id="authFirst" type="text" autocomplete="given-name" placeholder="First name" class="auth-in">
@@ -429,7 +429,7 @@
     <button class="btn google-btn" onclick="doGoogle()"><span class="g-icon">G</span> Continue with Google</button>
     <div class="auth-hint"><span class="settings-link" id="authMagic" onclick="doMagic()">Email me a login link instead</span></div>
     <div id="authMsg" class="auth-msg"></div>
-    <div class="auth-hint">By continuing you agree to Larder’s <a href="privacy.html" target="_blank" style="color:var(--muted)">Terms &amp; Privacy</a>.</div>
+    <div class="auth-hint">By continuing you agree to Home App’s <a href="privacy.html" target="_blank" style="color:var(--muted)">Terms &amp; Privacy</a>.</div>
     <div class="wc-login" style="margin-top:14px"><span id="authSwap"></span></div>
   </div>
 </div>
@@ -441,7 +441,7 @@
       <div class="acct-email">Signed in as <b id="acctEmail"></b></div>
       <div id="acctSubLine" class="ask-msg" style="margin:6px 0 2px"></div>
       <button class="btn primary" style="width:100%;margin-top:10px" onclick="editPrefs()">🍽 Edit my preferences &amp; regenerate plan</button>
-      <button class="btn" style="width:100%;margin-top:8px" onclick="openPaywall()">💳 Manage subscription</button>
+      <button class="btn" id="manageSubBtn" style="width:100%;margin-top:8px" onclick="openPaywall()">💳 Manage subscription</button>
       <div class="rc-h">Share this list</div>
       <div class="ask-msg">Give this code to your partner so you both use the same list.</div>
       <div class="share-row"><input id="shareCode" class="ask-in" readonly><button class="btn" id="copyShareBtn" onclick="copyShare()">Copy</button></div>
@@ -454,7 +454,7 @@
       <input id="joinCode" class="ask-in" placeholder="Paste a share code">
       <button class="btn primary" style="width:100%;margin-top:8px" onclick="joinList()">Join list</button>
       <div id="joinMsg" class="ask-msg"></div>
-      <button class="btn warn" style="width:100%;margin-top:18px" onclick="signOut()">Sign out</button>
+      <button class="btn warn" id="signOutBtn" style="width:100%;margin-top:18px" onclick="signOut()">Sign out</button>
     </div>
   </div>
 </div>
@@ -508,7 +508,7 @@
 
 <div id="paywall" class="paywall">
   <div class="pw-card">
-    <span class="pw-badge">Larder Premium</span>
+    <span class="pw-badge">Home App Premium</span>
     <h2 id="pwTitle">Start your free trial</h2>
     <div class="pw-sub" id="pwSub">Everything you need to plan, shop &amp; cook the week.</div>
     <div class="pw-plans" id="pwPlans"></div>
@@ -570,13 +570,16 @@ const SEED = { updatedAt:0, submissions:[], stores:[
     it("Spray oil / cooking oil") ]},
   { id:"e", name:"🧻 Essentials", collapsed:false, items:[
     it("Tissue box (square)","Coles"), it("Toilet paper","Costco") ]},
+  { id:"needlist", name:"🛍️ Things we need to buy", collapsed:false, items:[] },
 ]};
 
 function uid(){ return Math.random().toString(36).slice(2,9); }
 function it(n,d){ return {id:uid(), n:n, d:d||"", done:false, ts:0}; }
 
+function ensureNeedlist(s){ if(s&&s.stores&&!s.stores.some(x=>x.id==='needlist')) s.stores.push({id:'needlist', name:'🛍️ Things we need to buy', collapsed:false, items:[]}); }
+function needlistStore(){ const s=(data.stores||[]).find(x=>x.id==='needlist'); return s ? JSON.parse(JSON.stringify(s)) : {id:'needlist', name:'🛍️ Things we need to buy', collapsed:false, items:[]}; }
 let data = load();
-function load(){ try{ const s=JSON.parse(localStorage.getItem(LKEY)); if(s&&s.stores){ if(!s.submissions) s.submissions=[]; return s; } }catch(e){} return JSON.parse(JSON.stringify(SEED)); }
+function load(){ try{ const s=JSON.parse(localStorage.getItem(LKEY)); if(s&&s.stores){ if(!s.submissions) s.submissions=[]; ensureNeedlist(s); return s; } }catch(e){} return JSON.parse(JSON.stringify(SEED)); }
 function saveLocal(){ data.updatedAt=Date.now(); localStorage.setItem(LKEY, JSON.stringify(data)); }
 
 const sb = window.supabase.createClient(SUPA_URL, SUPA_KEY, {auth:{persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, storageKey: TEST_ENV?'sb-larder-test':undefined}});
@@ -591,6 +594,7 @@ function adoptRemote(remote){
   if(!remote || !remote.stores) return false;
   if((remote.updatedAt||0) > (data.updatedAt||0)){
     if(!remote.submissions) remote.submissions=[];
+    ensureNeedlist(remote);
     data = remote; localStorage.setItem(LKEY, JSON.stringify(data)); render(); return true;
   }
   return false;
@@ -730,7 +734,9 @@ async function doMagic(){
 async function signOut(){ await sb.auth.signOut(); localStorage.removeItem(K_ACTIVE); closeAcct(); showLogin(); }
 
 /* account + sharing */
-function openAcct(){ document.getElementById('acctEmail').textContent = (session&&session.user)?session.user.email:''; document.getElementById('shareCode').value = activeListId||''; document.getElementById('joinCode').value=''; document.getElementById('joinMsg').textContent=''; document.getElementById('inviteEmail').value=''; document.getElementById('inviteMsg').textContent=''; document.getElementById('acctModal').classList.add('show'); }
+function openAcct(){ document.getElementById('acctEmail').textContent = (session&&session.user&&session.user.email)?session.user.email:'Guest'; document.getElementById('shareCode').value = activeListId||''; document.getElementById('joinCode').value=''; document.getElementById('joinMsg').textContent=''; document.getElementById('inviteEmail').value=''; document.getElementById('inviteMsg').textContent='';
+  if(!TEST_ENV){ ['manageSubBtn','signOutBtn','acctSubLine'].forEach(id=>{ const e=document.getElementById(id); if(e) e.style.display='none'; }); }
+  document.getElementById('acctModal').classList.add('show'); }
 async function inviteByEmail(){
   const em=(document.getElementById('inviteEmail').value||'').trim().toLowerCase();
   const msg=document.getElementById('inviteMsg');
@@ -755,8 +761,24 @@ async function joinList(){ const code=(document.getElementById('joinCode').value
 }
 
 /* bootstrap */
-sb.auth.getSession().then(({data:{session:s}})=>{ session=s; if(s) afterLogin(); else showLogin(); });
-sb.auth.onAuthStateChange((_e,s)=>{ session=s; if(s){ afterLogin(); } else { showLogin(); } });
+sb.auth.getSession().then(async ({data:{session:s}})=>{
+  session=s;
+  if(s){ afterLogin(); return; }
+  if(TEST_ENV){ showLogin(); return; }
+  // PROD: no login screen — silently sign the visitor in as a guest
+  try{ const {data:res,error}=await sb.auth.signInAnonymously(); if(error||!res||!res.session){ startLocalMode(); } }
+  catch(e){ startLocalMode(); }
+});
+sb.auth.onAuthStateChange((_e,s)=>{ session=s; if(s){ afterLogin(); } else if(TEST_ENV){ showLogin(); } else { sb.auth.signInAnonymously().catch(()=>startLocalMode()); } });
+function startLocalMode(){
+  cloudOn=false;
+  document.getElementById('authGate').classList.remove('show');
+  document.getElementById('welcome').classList.remove('show');
+  document.getElementById('obGate').classList.remove('show');
+  document.getElementById('paywall').classList.remove('show');
+  document.getElementById('acctBtn').style.display='';
+  render(); setSync('On this device');
+}
 
 function render(){
   const list=document.getElementById('view-list'); list.innerHTML='';
@@ -933,7 +955,7 @@ function applyScannedItems(items){
     const note=[ (x.qty && String(x.qty)!=='1') ? String(x.qty) : '', (x.price!=null && x.price!=='') ? ('$'+x.price) : '' ].filter(Boolean).join(' · ');
     return it(String(x.name||'Item'), note);
   });
-  data.stores = [{ id:'r'+uid(), name:'🧾 From receipt', collapsed:false, items: secItems }];
+  data.stores = [{ id:'r'+uid(), name:'🧾 From receipt', collapsed:false, items: secItems }, needlistStore()];
   data.updatedAt = Date.now();
   localStorage.setItem(LKEY, JSON.stringify(data));
   render(); schedulePush(); setSync('Synced ✓'); showTab('list');
@@ -1145,7 +1167,7 @@ function applyMealplan(mp){
   data.mealplan=mp;
   const groups={}; (mp.shopping||[]).forEach(x=>{ const sec=((x.section||'Other')+'').trim()||'Other'; (groups[sec]=groups[sec]||[]).push(it(x.name||'Item', x.note||'')); });
   const emo=s=>({'Produce':'🥬','Dairy & eggs':'🥚','Dairy':'🥚','Meat & protein':'🍗','Meat':'🍗','Pantry':'🫙','Frozen':'❄️','Spices':'🌶️','Bakery':'🍞','Drinks':'🥤','Other':'🛒'}[s]||'🛒');
-  if(Object.keys(groups).length){ data.stores=Object.keys(groups).map(sec=>({id:'m'+uid(), name:emo(sec)+' '+sec, collapsed:false, items:groups[sec]})); }
+  if(Object.keys(groups).length){ const keep=needlistStore(); data.stores=Object.keys(groups).map(sec=>({id:'m'+uid(), name:emo(sec)+' '+sec, collapsed:false, items:groups[sec]})); data.stores.push(keep); }
   planDay=0; data.updatedAt=Date.now(); saveLocal(); render(); schedulePush(); showTab('plan');
 }
 
@@ -1289,8 +1311,8 @@ function trialStarted(){ return !!(profile && profile.data && profile.data.trial
 function trialEndsMs(){ return (profile && profile.data && profile.data.trial_start_ms || 0) + TRIAL_MS; }
 function trialActive(){ return trialStarted() && Date.now() < trialEndsMs(); }
 function trialDaysLeft(){ return Math.max(0, Math.ceil((trialEndsMs()-Date.now())/86400000)); }
-function canUseApp(){ return isSubscribed() || aiPaid() || trialActive(); }
-function canGenerate(){ return aiCredits()>0 || trialActive(); }
+function canUseApp(){ if(!TEST_ENV) return true; return isSubscribed() || aiPaid() || trialActive(); }
+function canGenerate(){ if(!TEST_ENV) return true; return aiCredits()>0 || trialActive(); }
 function applyGate(){
   const bar=document.getElementById('trialbar');
   if(canUseApp()){
@@ -1317,10 +1339,10 @@ async function startFreeTrial(){
 function pwPrimary(){ if(!canUseApp() && !trialStarted()) startFreeTrial(); else startCheckout(); }
 function updateAcctSub(){
   const el=document.getElementById('acctSubLine'); if(!el||!profile) return;
-  if(isSubscribed()){ el.className='ask-msg ok'; el.textContent='✓ Larder — $5/month subscription active'; }
+  if(isSubscribed()){ el.className='ask-msg ok'; el.textContent='✓ Home App — $5/month subscription active'; }
   else if(aiPaid()){ el.className='ask-msg ok'; el.textContent='✓ AI plan unlocked'+(aiCredits()>0?(' · '+aiCredits()+' AI generation'+(aiCredits()>1?'s':'')+' available'):''); }
   else if(trialActive()){ el.className='ask-msg ok'; el.textContent='✓ Free trial — '+trialDaysLeft()+' day'+(trialDaysLeft()===1?'':'s')+' left'; }
-  else { el.className='ask-msg'; el.textContent='Choose how to start to unlock Larder'; }
+  else { el.className='ask-msg'; el.textContent='Choose how to start to unlock Home App'; }
 }
 
 /* ---- paywall ---- */
@@ -1340,8 +1362,8 @@ function selectPlan(k){ selectedPlan=k; renderPwPlans(); }
 function openPaywall(locked){
   const pw=document.getElementById('paywall');
   const paid=isSubscribed()||aiPaid();
-  document.getElementById('pwTitle').textContent = paid ? 'Larder Premium' : (trialActive() ? 'Upgrade your plan' : (locked ? 'Your free trial has ended' : 'Choose how to start'));
-  document.getElementById('pwSub').textContent = paid ? 'You’re all set — enjoy Larder.' : (trialActive() ? 'You’re on the free trial — pick a plan to keep going after it ends.' : 'Let our AI build your plan, or bring your own for $5/month.');
+  document.getElementById('pwTitle').textContent = paid ? 'Home App Premium' : (trialActive() ? 'Upgrade your plan' : (locked ? 'Your free trial has ended' : 'Choose how to start'));
+  document.getElementById('pwSub').textContent = paid ? 'You’re all set — enjoy Home App.' : (trialActive() ? 'You’re on the free trial — pick a plan to keep going after it ends.' : 'Let our AI build your plan, or bring your own for $5/month.');
   const plansEl=document.getElementById('pwPlans'), cta=document.getElementById('pwCta');
   if(paid){ plansEl.style.display='none'; cta.style.display='none'; document.getElementById('pwNote').textContent='Manage or cancel anytime — just contact us.'; }
   else { plansEl.style.display='flex'; cta.style.display=''; cta.disabled=false; renderPwPlans(); }
@@ -1360,7 +1382,7 @@ async function startCheckout(){
 async function refreshSub(){
   const note=document.getElementById('pwNote'); note.textContent='Checking your subscription…';
   const ok=await pollSubscription(1);
-  note.textContent = ok ? '✓ Subscription active — enjoy Larder Premium!' : 'No active subscription found yet. If you just paid, wait a few seconds and try again.';
+  note.textContent = ok ? '✓ Subscription active — enjoy Home App Premium!' : 'No active subscription found yet. If you just paid, wait a few seconds and try again.';
   if(ok){ document.getElementById('paywall').classList.remove('show'); }
 }
 async function pollSubscription(tries){
@@ -1569,13 +1591,13 @@ function applyGenerated(mp){
     const note=[x.note||'', x.section||''].filter(Boolean).join(' · ');
     groups[store].push(it(x.name||'Item', note));
   });
-  if(order.length){ data.stores = order.map(s=>({ id:'p'+uid(), name:storeEmoji(s)+' '+s, collapsed:false, items:groups[s] })); }
+  if(order.length){ const keep=needlistStore(); data.stores = order.map(s=>({ id:'p'+uid(), name:storeEmoji(s)+' '+s, collapsed:false, items:groups[s] })); data.stores.push(keep); }
   planDay=0; data.updatedAt=Date.now(); saveLocal(); render(); schedulePush();
 }
 
 /* ---- TEST build badge ---- */
 if(TEST_ENV){
-  try{ document.title='Larder · TEST'; }catch(e){}
+  try{ document.title='Home App · TEST'; }catch(e){}
   const b=document.createElement('div'); b.id='testRibbon';
   b.textContent='TEST BUILD — Stripe test mode';
   b.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:200;background:#b4894c;color:#fff;font:600 12px "Inter",sans-serif;text-align:center;padding:6px 10px;letter-spacing:.3px;box-shadow:0 -2px 10px rgba(0,0,0,.15)';

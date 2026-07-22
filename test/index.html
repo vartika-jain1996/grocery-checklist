@@ -77,6 +77,8 @@
   .store-title[contenteditable]{ outline:none; border-bottom:1px dashed var(--teal); }
   .store-count{ font-size:12px; color:var(--muted); font-weight:600; background:var(--bg); padding:3px 9px; border-radius:20px; }
   .del-store{ flex:none; color:#b91c1c; font-size:18px; padding:0 4px; cursor:pointer; }
+  .add-item-btn{ flex:none; width:28px; height:28px; border-radius:50%; background:var(--teal-soft); color:var(--brand); font-size:19px; font-weight:700; display:flex; align-items:center; justify-content:center; cursor:pointer; line-height:1; }
+  .add-item-btn:active{ transform:scale(.9); }
   .items{ border-top:1px solid var(--line); }
   .store.collapsed .items{ display:none; }
   .item{ display:flex; align-items:flex-start; gap:12px; padding:12px 15px; border-bottom:1px solid var(--line); }
@@ -96,6 +98,11 @@
   body.editing .del-item{ display:block; }
   body.editing .del-store{ display:block; }
   .del-store{ display:none; }
+  .item-wrap{ position:relative; overflow:hidden; }
+  .item-wrap > .item{ background:var(--card); transition:transform .18s ease; position:relative; z-index:1; }
+  .swipe-del{ position:absolute; top:0; right:0; bottom:0; width:84px; border:none; background:#e11d48; color:#fff;
+    font-size:11px; font-weight:800; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; z-index:0; cursor:pointer; }
+  .swipe-del b{ font-size:16px; }
 
   .additem{ display:flex; padding:10px 15px; gap:8px; border-top:1px dashed var(--line); background:#fafbfc; }
   .store.collapsed .additem{ display:none; }
@@ -113,8 +120,8 @@
     border:1.5px dashed var(--teal); color:var(--teal); background:var(--teal-soft); border-radius:12px; cursor:pointer; }
   body.editing .addstore{ display:block; }
 
-  .toolbar{ display:flex; gap:8px; margin:14px 0 4px; }
-  .btn{ flex:1; padding:12px; font-size:13px; font-weight:600; border-radius:12px;
+  .toolbar{ display:flex; gap:8px; margin:8px 0 2px; }
+  .btn{ flex:1; padding:8px 10px; font-size:12px; font-weight:600; border-radius:9px;
     border:1px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer; transition:.12s; }
   .btn:active{ transform:scale(.985); }
   .btn.primary{ background:var(--brand); color:#fff; border-color:var(--brand); box-shadow:0 4px 14px rgba(46,93,75,.22); }
@@ -355,9 +362,6 @@
   <div id="view-log" class="hidden"></div>
 
   <div class="toolbar">
-    <button class="btn submit" onclick="submitList()">✅ Submit shop</button>
-  </div>
-  <div class="toolbar">
     <button class="btn coles" onclick="openColes()">🛒 Send list to Coles</button>
   </div>
   <div class="toolbar">
@@ -564,7 +568,7 @@ const ENV_SUFFIX = TEST_ENV ? "_test" : "";
 const K_ACTIVE = "activeList" + ENV_SUFFIX;
 const K_FIRST  = "larder_first" + ENV_SUFFIX;
 const LKEY = "grocery_checklist_v3" + ENV_SUFFIX;
-let editing = false, pushTimer = null, pulling = false;
+let editing = false, pushTimer = null, pulling = false, pushing = false, pushQueued = false;
 
 const SEED = { updatedAt:0, submissions:[], stores:[
   { id:"g", name:"🏪 Indian Grocery", collapsed:true, items:[
@@ -605,7 +609,7 @@ function monthLabel(k){ const p=(k||'').split('-'); return new Date(+p[0], (+p[1
 function ensureExtras(s){ if(!s) return; if(!s.bought||typeof s.bought!=='object') s.bought={}; if(!s.monthly||typeof s.monthly!=='object') s.monthly={periodKey:monthKey(), tasks:[], history:{}}; if(!Array.isArray(s.monthly.tasks)) s.monthly.tasks=[]; if(!s.monthly.history||typeof s.monthly.history!=='object') s.monthly.history={}; if(!s.monthly.periodKey) s.monthly.periodKey=monthKey(); }
 let data = load();
 function load(){ let s=null; try{ s=JSON.parse(localStorage.getItem(LKEY)); }catch(e){} if(!(s&&s.stores)) s=JSON.parse(JSON.stringify(SEED)); if(!s.submissions) s.submissions=[]; ensureSections(s); ensureExtras(s); return s; }
-function saveLocal(){ data.updatedAt=Date.now(); localStorage.setItem(LKEY, JSON.stringify(data)); }
+function saveLocal(){ data.updatedAt=Date.now(); try{ localStorage.setItem(LKEY, JSON.stringify(data)); }catch(e){ /* storage full or blocked — cloud sync still runs */ } }
 
 const sb = window.supabase.createClient(SUPA_URL, SUPA_KEY, {auth:{persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, storageKey: TEST_ENV?'sb-larder-test':undefined}});
 let cloudOn = false, activeListId = null, session = null;
@@ -614,18 +618,20 @@ function fmtDate(ts){ return new Date(ts).toLocaleDateString(undefined,{weekday:
 function fmtTime(ts){ return new Date(ts).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'}); }
 
 /* ---- per-user cloud sync (Supabase, RLS) ---- */
-function schedulePush(){ if(!cloudOn) return; clearTimeout(pushTimer); pushTimer=setTimeout(push, 600); }
+function schedulePush(){ if(!cloudOn) return; push(); }
 function adoptRemote(remote){
   if(!remote || !remote.stores) return false;
   if((remote.updatedAt||0) > (data.updatedAt||0)){
     if(!remote.submissions) remote.submissions=[];
     ensureSections(remote); ensureExtras(remote);
-    data = remote; localStorage.setItem(LKEY, JSON.stringify(data)); render(); return true;
+    data = remote; try{ localStorage.setItem(LKEY, JSON.stringify(data)); }catch(e){} render(); return true;
   }
   return false;
 }
 async function push(){
   if(!cloudOn || !activeListId) return;
+  if(pushing){ pushQueued=true; return; }   // coalesce concurrent pushes
+  pushing=true;
   try{ setSync('Syncing…');
     if(!editing){
       const {data:row} = await sb.from('lists').select('data').eq('id',activeListId).single();
@@ -635,6 +641,7 @@ async function push(){
     const {error} = await sb.from('lists').update({data:data, updated_at:new Date().toISOString()}).eq('id',activeListId);
     setSync(error?'Offline':'Synced ✓', error?'off':'');
   }catch(e){ setSync('Offline','off'); }
+  finally{ pushing=false; if(pushQueued){ pushQueued=false; push(); } }
 }
 async function pull(){
   if(!cloudOn || !activeListId) return;
@@ -660,7 +667,7 @@ async function afterLogin(){
       try{ await sb.from('list_access').insert({list_id:HID}); }catch(e){}
       activeListId=HID; localStorage.setItem(K_ACTIVE, HID); cloudOn=true;
       await pull(); collapseView(); render();
-      if(!window._syncInt){ window._syncInt=setInterval(pull,5000); document.addEventListener('visibilitychange',()=>{ if(!document.hidden) pull(); }); }
+      if(!window._syncInt){ window._syncInt=setInterval(pull,5000); document.addEventListener('visibilitychange',()=>{ if(document.hidden) push(); else pull(); }); }
       await loadProfileAndGate();
       return;
     }
@@ -685,11 +692,11 @@ async function afterLogin(){
       const {error} = await sb.from('lists').insert({id:id, data:seed});
       if(error){ setSync('Offline','off'); return; }
       await sb.from('list_access').insert({list_id:id});
-      data=seed; localStorage.setItem(LKEY, JSON.stringify(data));
+      data=seed; try{ localStorage.setItem(LKEY, JSON.stringify(data)); }catch(e){}
     }
     activeListId=id; localStorage.setItem(K_ACTIVE, id); cloudOn=true;
     await pull(); collapseView(); render();
-    if(!window._syncInt){ window._syncInt=setInterval(pull,5000); document.addEventListener('visibilitychange',()=>{ if(!document.hidden) pull(); }); }
+    if(!window._syncInt){ window._syncInt=setInterval(pull,5000); document.addEventListener('visibilitychange',()=>{ if(document.hidden) push(); else pull(); }); }
     await loadProfileAndGate();
   }catch(e){ setSync('Offline','off'); }
 }
@@ -793,7 +800,7 @@ async function joinList(){ const code=(document.getElementById('joinCode').value
   if(error && !/duplicate|already exists/i.test(error.message)){ jm.textContent='Could not join — check the code.'; return; }
   const {data:row,error:e2}=await sb.from('lists').select('data').eq('id',code).single();
   if(e2||!row){ jm.textContent='That code doesn’t match a list.'; return; }
-  activeListId=code; localStorage.setItem(K_ACTIVE,code); data=row.data||JSON.parse(JSON.stringify(SEED)); if(!data.submissions)data.submissions=[]; localStorage.setItem(LKEY,JSON.stringify(data)); render(); closeAcct(); setSync('Synced ✓');
+  activeListId=code; localStorage.setItem(K_ACTIVE,code); data=row.data||JSON.parse(JSON.stringify(SEED)); if(!data.submissions)data.submissions=[]; try{ localStorage.setItem(LKEY,JSON.stringify(data)); }catch(e){} render(); closeAcct(); setSync('Synced ✓');
 }
 
 /* bootstrap */
@@ -826,7 +833,9 @@ function render(){
     const shown = searchQ ? store.items.filter(x=>(x.n+' '+(x.d||'')).toLowerCase().includes(searchQ)) : store.items;
     if(searchQ && shown.length===0) return;
     const itemsHtml = shown.map(x=>{
-      return `<div class="item ${x.done?'done':''}">
+      return `<div class="item-wrap">
+      <button class="swipe-del" onclick="delItem('${store.id}','${x.id}')"><b>🗑</b>Delete</button>
+      <div class="item ${x.done?'done':''}">
         <div class="box" onclick="toggle('${store.id}','${x.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
         <div class="txt" onclick="editing?renameItem('${store.id}','${x.id}'):toggle('${store.id}','${x.id}')">
           <div class="name">${hl(x.n)}</div>
@@ -834,20 +843,17 @@ function render(){
           ${x.done?`<div class="stamp">✓ Ordered ${fmtDate(x.ts)} · ${fmtTime(x.ts)}</div>`:''}
         </div>
         <div class="del-item" onclick="delItem('${store.id}','${x.id}')">✕</div>
-      </div>`;
+      </div></div>`;
     }).join('');
     list.innerHTML += `<div class="store ${(!searchQ && store.collapsed)?'collapsed':''}">
       <div class="store-head">
         <span class="chev" onclick="toggleStore('${store.id}')">▾</span>
         <div class="store-title" onclick="editing?renameStore('${store.id}'):toggleStore('${store.id}')">${esc(store.name)}</div>
+        <span class="add-item-btn" onclick="event.stopPropagation();addItemPrompt('${store.id}')" title="Add item">＋</span>
         <span class="store-count">${sDone}/${store.items.length}</span>
         <span class="del-store" onclick="delStore('${store.id}')">🗑</span>
       </div>
       <div class="items">${itemsHtml||'<div class="item"><div class="txt note">No items yet</div></div>'}</div>
-      <div class="additem">
-        <input placeholder="Add item to ${esc(store.name)}…" onkeydown="if(event.key==='Enter')addItem('${store.id}',this)">
-        <button onclick="addItem('${store.id}',this.previousElementSibling)">Add</button>
-      </div>
     </div>`;
   });
   if(searchQ && !list.innerHTML.trim()) list.innerHTML=`<div class="empty">No items match "${esc(searchQ)}".</div>`;
@@ -863,28 +869,30 @@ function renderBuy(){
   let html='<div class="prep-intro">Your running lists and monthly tasks — shared with your household. Tick an item once you’ve bought it to move it into this month’s history.</div>';
   KEEP_SECTIONS.forEach(k=>{
     const store=(data.stores||[]).find(s=>s.id===k.id) || {id:k.id, name:k.name, items:[]};
-    const items=(store.items||[]).map(x=>`<div class="item">
+    const items=(store.items||[]).map(x=>`<div class="item-wrap">
+      <button class="swipe-del" onclick="delItem('${store.id}','${x.id}')"><b>🗑</b>Delete</button>
+      <div class="item">
         <div class="box" onclick="buyItem('${store.id}','${x.id}')" title="Mark as bought"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
         <div class="txt" onclick="renameItem('${store.id}','${x.id}')"><div class="name">${esc(x.n)}</div>${x.d?`<div class="note">${esc(x.d)}</div>`:''}</div>
         <div class="del-item" style="display:block" onclick="delItem('${store.id}','${x.id}')">✕</div>
-      </div>`).join('');
+      </div></div>`).join('');
     html += `<div class="store">
-      <div class="store-head"><div class="store-title" style="flex:1">${esc(store.name)}</div><span class="store-count">${(store.items||[]).length}</span></div>
-      <div class="items">${items||'<div class="item"><div class="txt note">Nothing here yet — add something below.</div></div>'}</div>
-      <div class="additem" style="display:flex"><input placeholder="Add an item…" onkeydown="if(event.key==='Enter')addItem('${store.id}',this)"><button onclick="addItem('${store.id}',this.previousElementSibling)">Add</button></div>
+      <div class="store-head"><div class="store-title" style="flex:1">${esc(store.name)}</div><span class="add-item-btn" onclick="addItemPrompt('${store.id}')" title="Add item">＋</span><span class="store-count">${(store.items||[]).length}</span></div>
+      <div class="items">${items||'<div class="item"><div class="txt note">Nothing here yet — tap ＋ to add.</div></div>'}</div>
     </div>`;
   });
   // Monthly checklist (recurring)
   const m=data.monthly; const doneCount=(m.tasks||[]).filter(t=>t.done).length;
-  const tasks=(m.tasks||[]).map(t=>`<div class="item ${t.done?'done':''}">
+  const tasks=(m.tasks||[]).map(t=>`<div class="item-wrap">
+    <button class="swipe-del" onclick="delMonthlyTask('${t.id}')"><b>🗑</b>Delete</button>
+    <div class="item ${t.done?'done':''}">
       <div class="box" onclick="toggleMonthly('${t.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
       <div class="txt"><div class="name">${esc(t.n)}</div>${t.done?`<div class="stamp">✓ Done ${fmtDate(t.ts)}</div>`:''}</div>
       <div class="del-item" style="display:block" onclick="delMonthlyTask('${t.id}')">✕</div>
-    </div>`).join('');
+    </div></div>`).join('');
   html += `<div class="store">
-    <div class="store-head"><div class="store-title" style="flex:1">📅 Monthly checklist · ${esc(monthLabel(m.periodKey))}</div><span class="store-count">${doneCount}/${(m.tasks||[]).length}</span></div>
-    <div class="items">${tasks||'<div class="item"><div class="txt note">Add tasks that repeat every month (they reset on the 1st).</div></div>'}</div>
-    <div class="additem" style="display:flex"><input placeholder="Add a monthly task…" onkeydown="if(event.key==='Enter')addMonthlyTask(this)"><button onclick="addMonthlyTask(this.previousElementSibling)">Add</button></div>
+    <div class="store-head"><div class="store-title" style="flex:1">📅 Monthly checklist · ${esc(monthLabel(m.periodKey))}</div><span class="add-item-btn" onclick="addMonthlyTaskPrompt()" title="Add task">＋</span><span class="store-count">${doneCount}/${(m.tasks||[]).length}</span></div>
+    <div class="items">${tasks||'<div class="item"><div class="txt note">Tap ＋ to add tasks that repeat every month (they reset on the 1st).</div></div>'}</div>
   </div>`;
   html += renderHistoryHTML();
   v.innerHTML=html;
@@ -958,8 +966,15 @@ function toggleStore(sid){ const s=findStore(sid); s.collapsed=!s.collapsed; sav
 function collapseAll(){ const anyOpen=data.stores.some(s=>!s.collapsed); data.stores.forEach(s=>s.collapsed=anyOpen); saveLocal(); render(); schedulePush(); }
 function collapseView(){ (data.stores||[]).forEach(s=>{ if(!KEEP_SECTIONS.some(k=>k.id===s.id)) s.collapsed=true; }); }
 
-function addItem(sid,input){ const v=(input.value||'').trim(); if(!v) return; findStore(sid).items.push(it(v)); input.value=''; saveLocal(); render(); schedulePush();
-  const boxes=document.querySelectorAll('.additem input'); }
+function addItem(sid,input){ const v=(input.value||'').trim(); if(!v) return; ensureSections(data); const s=findStore(sid); if(!s) return; s.items.push(it(v)); input.value=''; saveLocal(); render(); schedulePush(); if(cloudOn && typeof push==='function') push(); }
+function addItemPrompt(sid){
+  ensureSections(data);
+  let s=findStore(sid);
+  if(!s){ s={id:sid, name:sid, collapsed:false, items:[]}; data.stores.push(s); }
+  const label=(s.name||'').replace(/^\S+\s/,'')||'list';
+  askInput('Add to '+label, '', v=>{ v=(v||'').trim(); if(!v) return; s.items.push(it(v)); saveLocal(); render(); schedulePush(); if(cloudOn && typeof push==='function') push(); }, {placeholder:'Item name', okText:'Add'});
+}
+function addMonthlyTaskPrompt(){ ensureExtras(data); askInput('Add monthly task', '', v=>{ v=(v||'').trim(); if(!v) return; data.monthly.tasks.push({id:uid(), n:v, done:false, ts:0}); saveLocal(); render(); schedulePush(); if(cloudOn && typeof push==='function') push(); }, {placeholder:'e.g. Pay rent', okText:'Add'}); }
 function delItem(sid,iid){ const s=findStore(sid); s.items=s.items.filter(i=>i.id!==iid); saveLocal(); render(); schedulePush(); }
 function renameItem(sid,iid){ const x=findStore(sid).items.find(i=>i.id===iid); askInput('Rename item', x.n, v=>{ x.n=(v||'').trim()||x.n; saveLocal(); render(); schedulePush(); }, {okText:'Save'}); }
 function renameStore(sid){ const s=findStore(sid); askInput('Rename section', s.name, v=>{ s.name=(v||'').trim()||s.name; saveLocal(); render(); schedulePush(); }, {okText:'Save'}); }
@@ -1061,7 +1076,7 @@ function applyScannedItems(items){
   });
   data.stores = [{ id:'r'+uid(), name:'🧾 From receipt', collapsed:true, items: secItems }, ...preservedStores()];
   data.updatedAt = Date.now();
-  localStorage.setItem(LKEY, JSON.stringify(data));
+  try{ localStorage.setItem(LKEY, JSON.stringify(data)); }catch(e){}
   render(); schedulePush(); setSync('Synced ✓'); showTab('list');
 }
 function viewPhoto(i){ const s=(data.submissions||[])[i]; if(!s||!s.photo) return; const m=document.getElementById('photoModal'); m.querySelector('img').src=s.photo; m.classList.add('show'); }
@@ -1094,6 +1109,9 @@ function sendWhatsApp(){
   groups.forEach(g=>{ text+='\n'+g.name+'\n'+g.items.map(x=>'• '+x.n+(x.d?(' — '+x.d):'')).join('\n')+'\n'; });
   text+='\nSent from Home App';
   window.open('https://wa.me/?text='+encodeURIComponent(text), '_blank');
+  // untick everything after sending
+  (data.stores||[]).forEach(s=>{ if(KEEP_SECTIONS.some(k=>k.id===s.id)) return; (s.items||[]).forEach(x=>{ x.done=false; x.ts=0; }); });
+  saveLocal(); render(); schedulePush(); if(cloudOn && typeof push==='function') push();
 }
 function copyColes(){ navigator.clipboard.writeText(_colesNames.join('\n')).then(()=>{ const b=document.querySelector('.coles-copy'); if(b){ b.textContent='Copied ✓'; setTimeout(()=>b.textContent='📋 Copy list',1500); } }); }
 function showTab(t){
@@ -1721,6 +1739,33 @@ if(TEST_ENV){
   window.addEventListener('DOMContentLoaded',()=>document.body.appendChild(b));
   if(document.body) document.body.appendChild(b);
 }
+
+/* ---- Swipe-to-delete (touch) ---- */
+(function(){
+  let el=null, startX=0, startY=0, dx=0, active=false, openEl=null;
+  function itemFrom(t){ const i=t.closest?t.closest('.item'):null; return (i && i.parentElement && i.parentElement.classList.contains('item-wrap')) ? i : null; }
+  function closeOpen(){ if(openEl){ openEl.style.transform=''; openEl.classList.remove('swiped'); openEl=null; } }
+  document.addEventListener('touchstart', function(e){
+    const item=itemFrom(e.target);
+    if(openEl && item!==openEl && !(e.target.closest && e.target.closest('.swipe-del'))) closeOpen();
+    if(!item || (e.target.closest && e.target.closest('.swipe-del'))){ active=false; el=null; return; }
+    el=item; startX=e.touches[0].clientX; startY=e.touches[0].clientY; dx=el.classList.contains('swiped')?-84:0; active=true;
+  }, {passive:true});
+  document.addEventListener('touchmove', function(e){
+    if(!active||!el) return;
+    const ddx=e.touches[0].clientX-startX, ddy=e.touches[0].clientY-startY;
+    if(Math.abs(ddy)>Math.abs(ddx)+6){ active=false; el.style.transform=el.classList.contains('swiped')?'translateX(-84px)':''; return; }
+    const base=el.classList.contains('swiped')?-84:0;
+    dx=Math.max(-84, Math.min(0, base+ddx));
+    el.style.transform='translateX('+dx+'px)';
+  }, {passive:true});
+  document.addEventListener('touchend', function(){
+    if(!active||!el){ active=false; el=null; return; }
+    if(dx<=-42){ el.style.transform='translateX(-84px)'; el.classList.add('swiped'); openEl=el; }
+    else { el.style.transform=''; el.classList.remove('swiped'); if(openEl===el) openEl=null; }
+    active=false; el=null;
+  });
+})();
 
 /* ---- App passcode gate ---- */
 function showLock(){ const g=document.getElementById('lockGate'); if(!g) return; g.classList.add('show'); setTimeout(()=>{ const i=document.getElementById('lockPin'); if(i) i.focus(); },80); }

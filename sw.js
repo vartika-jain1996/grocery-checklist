@@ -1,5 +1,5 @@
 /* Home App service worker */
-const CACHE = 'homeapp-v11';
+const CACHE = 'homeapp-v12';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './favicon-32.png'];
 
 self.addEventListener('install', e => {

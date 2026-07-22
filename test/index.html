@@ -187,6 +187,7 @@
   .step-num{ display:inline-flex; width:20px; height:20px; border-radius:50%; background:var(--teal); color:#fff; font-size:11px; font-weight:800; align-items:center; justify-content:center; margin-right:9px; vertical-align:middle; }
   .rc-link{ font-size:11.5px; color:var(--teal); font-weight:700; margin-top:3px; cursor:pointer; }
   .btn.coles{ background:#e01a22; color:#fff; border-color:#e01a22; }
+  .btn.wa{ background:#25D366; color:#fff; border-color:#25D366; }
   .coles-item{ display:flex; justify-content:space-between; align-items:center; gap:10px; padding:11px 12px; border:1px solid var(--line); border-radius:9px; margin:7px 0; font-size:13.5px; font-weight:600; color:var(--ink); text-decoration:none; }
   .coles-item:active{ background:var(--bg); }
   .coles-go{ font-size:12px; color:#e01a22; font-weight:800; flex:none; }
@@ -358,6 +359,9 @@
   </div>
   <div class="toolbar">
     <button class="btn coles" onclick="openColes()">🛒 Send list to Coles</button>
+  </div>
+  <div class="toolbar">
+    <button class="btn wa" onclick="sendWhatsApp()">📲 Send ticked to WhatsApp</button>
   </div>
   <div class="toolbar">
     <button class="btn primary" id="editBtn" onclick="toggleEdit()">✏️ Edit list</button>
@@ -563,17 +567,17 @@ const LKEY = "grocery_checklist_v3" + ENV_SUFFIX;
 let editing = false, pushTimer = null, pulling = false;
 
 const SEED = { updatedAt:0, submissions:[], stores:[
-  { id:"g", name:"🏪 Indian Grocery", collapsed:false, items:[
+  { id:"g", name:"🏪 Indian Grocery", collapsed:true, items:[
     it("Ginger turmeric"), it("Low-fat paneer","~1.2kg · 4 of 5 dishes + burrito bowls"),
     it("Fresh turmeric + black pepper"),
     it("Spices bundle","shahi paneer masala, egg-curry masala, garam masala, Kashmiri chilli, coriander seeds, cumin, turmeric, mustard & fennel powder, methi"),
     it("Cumin seeds","jeera water"), it("Saffron strands"),
     it("Chaat masala","for mint chutney"), it("Black salt (kala namak)","for mint chutney") ]},
-  { id:"c", name:"📦 Costco", collapsed:false, items:[
+  { id:"c", name:"📦 Costco", collapsed:true, items:[
     it("Eggs — 1 dozen","Egg Curry"), it("Whey or plant protein powder","vanilla"),
     it("Collagen powder"), it("Black beans / rajma","canned"), it("Sweetcorn","canned/frozen"),
     it("Red onion"), it("Onions — ~1.5kg","regular/brown"), it("Coffee"), it("Multivitamins") ]},
-  { id:"w", name:"🛒 Woolworths / Coles", collapsed:false, items:[
+  { id:"w", name:"🛒 Woolworths / Coles", collapsed:true, items:[
     it("Low-fat Greek yogurt","large tub ~2kg · smoothies, burrito bowls, achari marinade"),
     it("Fat-free / skim milk","~3L · incl. 200ml for Shahi Paneer"), it("Taco / burrito seasoning"),
     it("Tofu","optional · paneer sub"), it("Mixed berries","fresh or frozen, ~1.5kg"),
@@ -583,18 +587,18 @@ const SEED = { updatedAt:0, submissions:[], stores:[
     it("Low-sodium / dark soy sauce"), it("Green chilli sauce"), it("Ketchup"), it("Cornflour"),
     it("Almonds, walnuts, mixed nuts"), it("Coconut water — 7+"), it("Stevia / sugar-free sweetener"),
     it("Spray oil / cooking oil") ]},
-  { id:"e", name:"🧻 Essentials", collapsed:false, items:[
+  { id:"e", name:"🧻 Essentials", collapsed:true, items:[
     it("Tissue box (square)","Coles"), it("Toilet paper","Costco") ]},
-  { id:"needlist", name:"🛍️ Things we need to buy", collapsed:false, items:[] },
-  { id:"upcoming", name:"🗓️ Buy in coming months", collapsed:false, items:[] },
+  { id:"needlist", name:"🛍️ Things we need to buy", collapsed:true, items:[] },
+  { id:"upcoming", name:"🗓️ Buy in coming months", collapsed:true, items:[] },
 ]};
 
 function uid(){ return Math.random().toString(36).slice(2,9); }
 function it(n,d){ return {id:uid(), n:n, d:d||"", done:false, ts:0}; }
 
 const KEEP_SECTIONS = [ {id:'needlist', name:'🛍️ Things we need to buy'}, {id:'upcoming', name:'🗓️ Buy in coming months'} ];
-function ensureSections(s){ if(!s||!s.stores) return; KEEP_SECTIONS.forEach(k=>{ if(!s.stores.some(x=>x.id===k.id)) s.stores.push({id:k.id, name:k.name, collapsed:false, items:[]}); }); }
-function keepStore(k){ const s=(data.stores||[]).find(x=>x.id===k.id); return s ? JSON.parse(JSON.stringify(s)) : {id:k.id, name:k.name, collapsed:false, items:[]}; }
+function ensureSections(s){ if(!s||!s.stores) return; KEEP_SECTIONS.forEach(k=>{ if(!s.stores.some(x=>x.id===k.id)) s.stores.push({id:k.id, name:k.name, collapsed:true, items:[]}); }); }
+function keepStore(k){ const s=(data.stores||[]).find(x=>x.id===k.id); return s ? JSON.parse(JSON.stringify(s)) : {id:k.id, name:k.name, collapsed:true, items:[]}; }
 function preservedStores(){ return KEEP_SECTIONS.map(keepStore); }
 function monthKey(d){ d=d||new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
 function monthLabel(k){ const p=(k||'').split('-'); return new Date(+p[0], (+p[1]||1)-1, 1).toLocaleDateString(undefined,{month:'long',year:'numeric'}); }
@@ -655,7 +659,7 @@ async function afterLogin(){
       try{ const {data:row}=await sb.from('lists').select('id').eq('id',HID).maybeSingle(); if(!row){ const seed=JSON.parse(JSON.stringify(SEED)); seed.updatedAt=Date.now(); await sb.from('lists').insert({id:HID, data:seed}); } }catch(e){}
       try{ await sb.from('list_access').insert({list_id:HID}); }catch(e){}
       activeListId=HID; localStorage.setItem(K_ACTIVE, HID); cloudOn=true;
-      await pull(); render();
+      await pull(); collapseView(); render();
       if(!window._syncInt){ window._syncInt=setInterval(pull,5000); document.addEventListener('visibilitychange',()=>{ if(!document.hidden) pull(); }); }
       await loadProfileAndGate();
       return;
@@ -684,7 +688,7 @@ async function afterLogin(){
       data=seed; localStorage.setItem(LKEY, JSON.stringify(data));
     }
     activeListId=id; localStorage.setItem(K_ACTIVE, id); cloudOn=true;
-    await pull(); render();
+    await pull(); collapseView(); render();
     if(!window._syncInt){ window._syncInt=setInterval(pull,5000); document.addEventListener('visibilitychange',()=>{ if(!document.hidden) pull(); }); }
     await loadProfileAndGate();
   }catch(e){ setSync('Offline','off'); }
@@ -952,6 +956,7 @@ function findStore(sid){ return data.stores.find(s=>s.id===sid); }
 function toggle(sid,iid){ const x=findStore(sid).items.find(i=>i.id===iid); x.done=!x.done; x.ts=Date.now(); saveLocal(); render(); schedulePush(); }
 function toggleStore(sid){ const s=findStore(sid); s.collapsed=!s.collapsed; saveLocal(); render(); schedulePush(); }
 function collapseAll(){ const anyOpen=data.stores.some(s=>!s.collapsed); data.stores.forEach(s=>s.collapsed=anyOpen); saveLocal(); render(); schedulePush(); }
+function collapseView(){ (data.stores||[]).forEach(s=>{ if(!KEEP_SECTIONS.some(k=>k.id===s.id)) s.collapsed=true; }); }
 
 function addItem(sid,input){ const v=(input.value||'').trim(); if(!v) return; findStore(sid).items.push(it(v)); input.value=''; saveLocal(); render(); schedulePush();
   const boxes=document.querySelectorAll('.additem input'); }
@@ -959,7 +964,7 @@ function delItem(sid,iid){ const s=findStore(sid); s.items=s.items.filter(i=>i.i
 function renameItem(sid,iid){ const x=findStore(sid).items.find(i=>i.id===iid); askInput('Rename item', x.n, v=>{ x.n=(v||'').trim()||x.n; saveLocal(); render(); schedulePush(); }, {okText:'Save'}); }
 function renameStore(sid){ const s=findStore(sid); askInput('Rename section', s.name, v=>{ s.name=(v||'').trim()||s.name; saveLocal(); render(); schedulePush(); }, {okText:'Save'}); }
 function delStore(sid){ const s=findStore(sid); askConfirm('Delete section?', 'Delete "'+s.name+'" and all its items? This cannot be undone.', ()=>{ data.stores=data.stores.filter(x=>x.id!==sid); saveLocal(); render(); schedulePush(); }); }
-function addStore(){ askInput('New section name', '', v=>{ const name=(v||'').trim(); if(!name) return; data.stores.push({id:uid(), name:name, collapsed:false, items:[]}); saveLocal(); render(); schedulePush(); }, {placeholder:'e.g. 🥩 Butcher', okText:'Add section'}); }
+function addStore(){ askInput('New section name', '', v=>{ const name=(v||'').trim(); if(!name) return; data.stores.push({id:uid(), name:name, collapsed:true, items:[]}); saveLocal(); render(); schedulePush(); }, {placeholder:'e.g. 🥩 Butcher', okText:'Add section'}); }
 
 function toggleEdit(){
   if(!editing){ enterEdit(); return; }
@@ -1054,7 +1059,7 @@ function applyScannedItems(items){
     const note=[ (x.qty && String(x.qty)!=='1') ? String(x.qty) : '', (x.price!=null && x.price!=='') ? ('$'+x.price) : '' ].filter(Boolean).join(' · ');
     return it(String(x.name||'Item'), note);
   });
-  data.stores = [{ id:'r'+uid(), name:'🧾 From receipt', collapsed:false, items: secItems }, ...preservedStores()];
+  data.stores = [{ id:'r'+uid(), name:'🧾 From receipt', collapsed:true, items: secItems }, ...preservedStores()];
   data.updatedAt = Date.now();
   localStorage.setItem(LKEY, JSON.stringify(data));
   render(); schedulePush(); setSync('Synced ✓'); showTab('list');
@@ -1079,6 +1084,17 @@ function showColes(names, label){
   m.classList.add('show');
 }
 function closeColes(){ document.getElementById('colesModal').classList.remove('show'); }
+
+/* ===== Send ticked items to WhatsApp ===== */
+function sendWhatsApp(){
+  const groups=[];
+  (data.stores||[]).forEach(s=>{ if(KEEP_SECTIONS.some(k=>k.id===s.id)) return; const picked=(s.items||[]).filter(x=>x.done); if(picked.length) groups.push({name:s.name, items:picked}); });
+  if(!groups.length){ askInfo('Tick some items first','Tick the items you’d like to send, then tap “Send ticked to WhatsApp” — you’ll get to pick which contact to send them to.'); return; }
+  let text='🛒 Shopping list\n';
+  groups.forEach(g=>{ text+='\n'+g.name+'\n'+g.items.map(x=>'• '+x.n+(x.d?(' — '+x.d):'')).join('\n')+'\n'; });
+  text+='\nSent from Home App';
+  window.open('https://wa.me/?text='+encodeURIComponent(text), '_blank');
+}
 function copyColes(){ navigator.clipboard.writeText(_colesNames.join('\n')).then(()=>{ const b=document.querySelector('.coles-copy'); if(b){ b.textContent='Copied ✓'; setTimeout(()=>b.textContent='📋 Copy list',1500); } }); }
 function showTab(t){
   ['list','buy','plan','prep','log'].forEach(x=>{
@@ -1267,7 +1283,7 @@ function applyMealplan(mp){
   data.mealplan=mp;
   const groups={}; (mp.shopping||[]).forEach(x=>{ const sec=((x.section||'Other')+'').trim()||'Other'; (groups[sec]=groups[sec]||[]).push(it(x.name||'Item', x.note||'')); });
   const emo=s=>({'Produce':'🥬','Dairy & eggs':'🥚','Dairy':'🥚','Meat & protein':'🍗','Meat':'🍗','Pantry':'🫙','Frozen':'❄️','Spices':'🌶️','Bakery':'🍞','Drinks':'🥤','Other':'🛒'}[s]||'🛒');
-  if(Object.keys(groups).length){ const keep=preservedStores(); data.stores=Object.keys(groups).map(sec=>({id:'m'+uid(), name:emo(sec)+' '+sec, collapsed:false, items:groups[sec]})); data.stores.push(...keep); }
+  if(Object.keys(groups).length){ const keep=preservedStores(); data.stores=Object.keys(groups).map(sec=>({id:'m'+uid(), name:emo(sec)+' '+sec, collapsed:true, items:groups[sec]})); data.stores.push(...keep); }
   planDay=0; data.updatedAt=Date.now(); saveLocal(); render(); schedulePush(); showTab('plan');
 }
 
@@ -1692,7 +1708,7 @@ function applyGenerated(mp){
     const note=[x.note||'', x.section||''].filter(Boolean).join(' · ');
     groups[store].push(it(x.name||'Item', note));
   });
-  if(order.length){ const keep=preservedStores(); data.stores = order.map(s=>({ id:'p'+uid(), name:storeEmoji(s)+' '+s, collapsed:false, items:groups[s] })); data.stores.push(...keep); }
+  if(order.length){ const keep=preservedStores(); data.stores = order.map(s=>({ id:'p'+uid(), name:storeEmoji(s)+' '+s, collapsed:true, items:groups[s] })); data.stores.push(...keep); }
   planDay=0; data.updatedAt=Date.now(); saveLocal(); render(); schedulePush();
 }
 
@@ -1715,6 +1731,7 @@ function tryUnlock(){
 }
 if(localStorage.getItem('app_unlocked')!=='1') showLock();
 
+collapseView();
 render();
 /* sync + login are started by the auth bootstrap above */
 if(!TEST_ENV && 'serviceWorker' in navigator){ window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{})); }

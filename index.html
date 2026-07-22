@@ -1779,7 +1779,12 @@ if(localStorage.getItem('app_unlocked')!=='1') showLock();
 collapseView();
 render();
 /* sync + login are started by the auth bootstrap above */
-if(!TEST_ENV && 'serviceWorker' in navigator){ window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{})); }
+if(!TEST_ENV && 'serviceWorker' in navigator){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').then(reg=>{ try{ reg.update(); }catch(e){} }).catch(()=>{}));
+  let _swReloaded=false;
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{ if(_swReloaded) return; _swReloaded=true; location.reload(); });
+  setInterval(()=>{ navigator.serviceWorker.getRegistration().then(r=>{ if(r) r.update(); }).catch(()=>{}); }, 60000);
+}
 </script>
 </body>
 </html>

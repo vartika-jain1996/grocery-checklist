@@ -90,6 +90,7 @@
   .item.done .box svg{ opacity:1; }
   .txt{ flex:1; cursor:pointer; }
   .name{ font-size:14.5px; font-weight:600; }
+  .name-in{ width:100%; border:none; outline:none; font-size:14.5px; font-weight:600; background:transparent; color:var(--ink); font-family:inherit; padding:2px 0; }
   .item.done .name{ color:var(--done); text-decoration:line-through; }
   .note{ font-size:12px; color:var(--muted); margin-top:2px; }
   .stamp{ font-size:11px; color:var(--teal); margin-top:3px; font-weight:600; }
@@ -568,7 +569,7 @@ const ENV_SUFFIX = TEST_ENV ? "_test" : "";
 const K_ACTIVE = "activeList" + ENV_SUFFIX;
 const K_FIRST  = "larder_first" + ENV_SUFFIX;
 const LKEY = "grocery_checklist_v3" + ENV_SUFFIX;
-let editing = false, pushTimer = null, pulling = false, pushing = false, pushQueued = false;
+let editing = false, pushTimer = null, pulling = false, pushing = false, pushQueued = false, newItemId = null, newTaskId = null;
 
 const SEED = { updatedAt:0, submissions:[], stores:[
   { id:"g", name:"🏪 Indian Grocery", collapsed:true, items:[
@@ -598,7 +599,8 @@ const SEED = { updatedAt:0, submissions:[], stores:[
 ]};
 
 function uid(){ return Math.random().toString(36).slice(2,9); }
-function it(n,d){ return {id:uid(), n:n, d:d||"", done:false, ts:0}; }
+function it(n,d){ return {id:uid(), n:n, d:d||"", done:false, ts:0, mt:Date.now()}; }
+function tomb(id){ data.tomb=data.tomb||{}; data.tomb[id]=Date.now(); }
 
 const KEEP_SECTIONS = [ {id:'needlist', name:'🛍️ Things we need to buy'}, {id:'upcoming', name:'🗓️ Buy in coming months'} ];
 function ensureSections(s){ if(!s||!s.stores) return; KEEP_SECTIONS.forEach(k=>{ if(!s.stores.some(x=>x.id===k.id)) s.stores.push({id:k.id, name:k.name, collapsed:true, items:[]}); }); }
@@ -606,7 +608,7 @@ function keepStore(k){ const s=(data.stores||[]).find(x=>x.id===k.id); return s 
 function preservedStores(){ return KEEP_SECTIONS.map(keepStore); }
 function monthKey(d){ d=d||new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
 function monthLabel(k){ const p=(k||'').split('-'); return new Date(+p[0], (+p[1]||1)-1, 1).toLocaleDateString(undefined,{month:'long',year:'numeric'}); }
-function ensureExtras(s){ if(!s) return; if(!s.bought||typeof s.bought!=='object') s.bought={}; if(!s.monthly||typeof s.monthly!=='object') s.monthly={periodKey:monthKey(), tasks:[], history:{}}; if(!Array.isArray(s.monthly.tasks)) s.monthly.tasks=[]; if(!s.monthly.history||typeof s.monthly.history!=='object') s.monthly.history={}; if(!s.monthly.periodKey) s.monthly.periodKey=monthKey(); }
+function ensureExtras(s){ if(!s) return; if(!s.bought||typeof s.bought!=='object') s.bought={}; if(!s.tomb||typeof s.tomb!=='object') s.tomb={}; if(!s.monthly||typeof s.monthly!=='object') s.monthly={periodKey:monthKey(), tasks:[], history:{}}; if(!Array.isArray(s.monthly.tasks)) s.monthly.tasks=[]; if(!s.monthly.history||typeof s.monthly.history!=='object') s.monthly.history={}; if(!s.monthly.periodKey) s.monthly.periodKey=monthKey(); }
 let data = load();
 function load(){ let s=null; try{ s=JSON.parse(localStorage.getItem(LKEY)); }catch(e){} if(!(s&&s.stores)) s=JSON.parse(JSON.stringify(SEED)); if(!s.submissions) s.submissions=[]; ensureSections(s); ensureExtras(s); return s; }
 function saveLocal(){ data.updatedAt=Date.now(); try{ localStorage.setItem(LKEY, JSON.stringify(data)); }catch(e){ /* storage full or blocked — cloud sync still runs */ } }
@@ -628,24 +630,69 @@ function adoptRemote(remote){
   }
   return false;
 }
+/* Merge local + remote so edits from BOTH devices combine (no last-write-wins clobbering).
+   Items merge by id (newer .mt wins); deletions use tombstones so they don't reappear. */
+function mergeData(local, remote){
+  if(!remote || !remote.stores) return local;
+  const merged = JSON.parse(JSON.stringify(remote));
+  const localNewer = (local.updatedAt||0) >= (remote.updatedAt||0);
+  // tombstones (union, newest wins)
+  merged.tomb = Object.assign({}, remote.tomb||{});
+  const lt = local.tomb||{}; for(const k in lt){ if(!merged.tomb[k] || lt[k]>merged.tomb[k]) merged.tomb[k]=lt[k]; }
+  // stores + items
+  (local.stores||[]).forEach(ls=>{
+    let ms = merged.stores.find(s=>s.id===ls.id);
+    if(!ms){ ms={id:ls.id,name:ls.name,collapsed:ls.collapsed,items:[]}; merged.stores.push(ms); }
+    if(localNewer) ms.name = ls.name;
+    const byId={}; ms.items.forEach(i=>byId[i.id]=i);
+    (ls.items||[]).forEach(li=>{
+      const mi=byId[li.id];
+      if(!mi){ ms.items.push(JSON.parse(JSON.stringify(li))); byId[li.id]=li; }
+      else if((li.mt||li.ts||0) >= (mi.mt||mi.ts||0)) Object.assign(mi, li);
+    });
+  });
+  merged.stores.forEach(s=>{ s.items=(s.items||[]).filter(i=>!merged.tomb[i.id]); });
+  // monthly tasks (union by id + mt, minus tombstones)
+  const lm=local.monthly||{tasks:[],history:{}}, rm=remote.monthly||{tasks:[],history:{}};
+  const mm=merged.monthly||{tasks:[],history:{},periodKey:''};
+  const tById={}; (mm.tasks||[]).forEach(t=>tById[t.id]=t);
+  (lm.tasks||[]).forEach(x=>{ const mt=tById[x.id]; if(!mt){ (mm.tasks=mm.tasks||[]).push(JSON.parse(JSON.stringify(x))); tById[x.id]=x; } else if((x.mt||x.ts||0)>=(mt.mt||mt.ts||0)) Object.assign(mt,x); });
+  mm.tasks=(mm.tasks||[]).filter(t=>!merged.tomb[t.id]);
+  mm.periodKey = localNewer ? (lm.periodKey||mm.periodKey) : (rm.periodKey||mm.periodKey);
+  mm.history=mm.history||{};
+  [lm.history||{}, rm.history||{}].forEach(h=>{ for(const k in h){ const arr=mm.history[k]||[]; const seen=new Set(arr.map(x=>x.name+'|'+x.ts)); (h[k]||[]).forEach(x=>{ if(!seen.has(x.name+'|'+x.ts)) arr.push(x); }); mm.history[k]=arr; } });
+  merged.monthly=mm;
+  // bought history (union by month)
+  const mb=merged.bought||{};
+  [local.bought||{}, remote.bought||{}].forEach(b=>{ for(const k in b){ const arr=mb[k]||[]; const seen=new Set(arr.map(x=>x.name+'|'+x.ts)); (b[k]||[]).forEach(x=>{ if(!seen.has(x.name+'|'+x.ts)) arr.push(x); }); mb[k]=arr; } });
+  merged.bought=mb;
+  // meal plan / submissions from the newer side
+  if(localNewer){ if(local.mealplan) merged.mealplan=local.mealplan; if(local.submissions) merged.submissions=local.submissions; }
+  merged.updatedAt=Date.now();
+  return merged;
+}
 async function push(){
   if(!cloudOn || !activeListId) return;
   if(pushing){ pushQueued=true; return; }   // coalesce concurrent pushes
   pushing=true;
   try{ setSync('Syncing…');
-    if(!editing){
-      const {data:row} = await sb.from('lists').select('data').eq('id',activeListId).single();
-      const rem = row && row.data;
-      if(rem && rem.stores && (rem.updatedAt||0) > (data.updatedAt||0)){ adoptRemote(rem); setSync('Synced ✓'); return; }
+    let toWrite = data;
+    const {data:row} = await sb.from('lists').select('data').eq('id',activeListId).single();
+    const rem = row && row.data;
+    if(rem && rem.stores){
+      const merged = mergeData(data, rem);
+      data = merged; try{ localStorage.setItem(LKEY, JSON.stringify(data)); }catch(e){}
+      if(!newItemId) render();
+      toWrite = merged;
     }
-    const {error} = await sb.from('lists').update({data:data, updated_at:new Date().toISOString()}).eq('id',activeListId);
+    const {error} = await sb.from('lists').update({data:toWrite, updated_at:new Date().toISOString()}).eq('id',activeListId);
     setSync(error?'Offline':'Synced ✓', error?'off':'');
   }catch(e){ setSync('Offline','off'); }
   finally{ pushing=false; if(pushQueued){ pushQueued=false; push(); } }
 }
 async function pull(){
   if(!cloudOn || !activeListId) return;
-  if(pulling || editing) return; pulling=true;
+  if(pulling || editing || newItemId) return; pulling=true;
   try{
     const {data:row,error} = await sb.from('lists').select('data').eq('id',activeListId).single();
     if(!error && row) adoptRemote(row.data);
@@ -833,15 +880,14 @@ function render(){
     const shown = searchQ ? store.items.filter(x=>(x.n+' '+(x.d||'')).toLowerCase().includes(searchQ)) : store.items;
     if(searchQ && shown.length===0) return;
     const itemsHtml = shown.map(x=>{
+      const txt = (x.id===newItemId)
+        ? `<div class="txt"><input id="newrow-input" class="name-in" placeholder="New item…" onkeydown="onNewItemKey(event,'${store.id}','${x.id}')" onblur="commitNewItem('${store.id}','${x.id}',this.value)"></div>`
+        : `<div class="txt" onclick="editing?renameItem('${store.id}','${x.id}'):toggle('${store.id}','${x.id}')"><div class="name">${hl(x.n)}</div>${x.d?`<div class="note">${hl(x.d)}</div>`:''}${x.done?`<div class="stamp">✓ Ordered ${fmtDate(x.ts)} · ${fmtTime(x.ts)}</div>`:''}</div>`;
       return `<div class="item-wrap">
       <button class="swipe-del" onclick="delItem('${store.id}','${x.id}')"><b>🗑</b>Delete</button>
       <div class="item ${x.done?'done':''}">
         <div class="box" onclick="toggle('${store.id}','${x.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
-        <div class="txt" onclick="editing?renameItem('${store.id}','${x.id}'):toggle('${store.id}','${x.id}')">
-          <div class="name">${hl(x.n)}</div>
-          ${x.d?`<div class="note">${hl(x.d)}</div>`:''}
-          ${x.done?`<div class="stamp">✓ Ordered ${fmtDate(x.ts)} · ${fmtTime(x.ts)}</div>`:''}
-        </div>
+        ${txt}
         <div class="del-item" onclick="delItem('${store.id}','${x.id}')">✕</div>
       </div></div>`;
     }).join('');
@@ -849,7 +895,7 @@ function render(){
       <div class="store-head">
         <span class="chev" onclick="toggleStore('${store.id}')">▾</span>
         <div class="store-title" onclick="editing?renameStore('${store.id}'):toggleStore('${store.id}')">${esc(store.name)}</div>
-        <span class="add-item-btn" onclick="event.stopPropagation();addItemPrompt('${store.id}')" title="Add item">＋</span>
+        <span class="add-item-btn" onclick="event.stopPropagation();addItemHere('${store.id}')" title="Add item">＋</span>
         <span class="store-count">${sDone}/${store.items.length}</span>
         <span class="del-store" onclick="delStore('${store.id}')">🗑</span>
       </div>
@@ -869,29 +915,39 @@ function renderBuy(){
   let html='<div class="prep-intro">Your running lists and monthly tasks — shared with your household. Tick an item once you’ve bought it to move it into this month’s history.</div>';
   KEEP_SECTIONS.forEach(k=>{
     const store=(data.stores||[]).find(s=>s.id===k.id) || {id:k.id, name:k.name, items:[]};
-    const items=(store.items||[]).map(x=>`<div class="item-wrap">
+    const items=(store.items||[]).map(x=>{
+      const txt=(x.id===newItemId)
+        ? `<div class="txt"><input id="newrow-input" class="name-in" placeholder="New item…" onkeydown="onNewItemKey(event,'${store.id}','${x.id}')" onblur="commitNewItem('${store.id}','${x.id}',this.value)"></div>`
+        : `<div class="txt" onclick="renameItem('${store.id}','${x.id}')"><div class="name">${esc(x.n)}</div>${x.d?`<div class="note">${esc(x.d)}</div>`:''}</div>`;
+      return `<div class="item-wrap">
       <button class="swipe-del" onclick="delItem('${store.id}','${x.id}')"><b>🗑</b>Delete</button>
       <div class="item">
         <div class="box" onclick="buyItem('${store.id}','${x.id}')" title="Mark as bought"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
-        <div class="txt" onclick="renameItem('${store.id}','${x.id}')"><div class="name">${esc(x.n)}</div>${x.d?`<div class="note">${esc(x.d)}</div>`:''}</div>
+        ${txt}
         <div class="del-item" style="display:block" onclick="delItem('${store.id}','${x.id}')">✕</div>
-      </div></div>`).join('');
+      </div></div>`;
+    }).join('');
     html += `<div class="store">
-      <div class="store-head"><div class="store-title" style="flex:1">${esc(store.name)}</div><span class="add-item-btn" onclick="addItemPrompt('${store.id}')" title="Add item">＋</span><span class="store-count">${(store.items||[]).length}</span></div>
+      <div class="store-head"><div class="store-title" style="flex:1">${esc(store.name)}</div><span class="add-item-btn" onclick="addItemHere('${store.id}')" title="Add item">＋</span><span class="store-count">${(store.items||[]).length}</span></div>
       <div class="items">${items||'<div class="item"><div class="txt note">Nothing here yet — tap ＋ to add.</div></div>'}</div>
     </div>`;
   });
   // Monthly checklist (recurring)
   const m=data.monthly; const doneCount=(m.tasks||[]).filter(t=>t.done).length;
-  const tasks=(m.tasks||[]).map(t=>`<div class="item-wrap">
+  const tasks=(m.tasks||[]).map(t=>{
+    const txt=(t.id===newTaskId)
+      ? `<div class="txt"><input id="newtask-input" class="name-in" placeholder="New task…" onkeydown="onNewTaskKey(event,'${t.id}')" onblur="commitNewTask('${t.id}',this.value)"></div>`
+      : `<div class="txt"><div class="name">${esc(t.n)}</div>${t.done?`<div class="stamp">✓ Done ${fmtDate(t.ts)}</div>`:''}</div>`;
+    return `<div class="item-wrap">
     <button class="swipe-del" onclick="delMonthlyTask('${t.id}')"><b>🗑</b>Delete</button>
     <div class="item ${t.done?'done':''}">
       <div class="box" onclick="toggleMonthly('${t.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
-      <div class="txt"><div class="name">${esc(t.n)}</div>${t.done?`<div class="stamp">✓ Done ${fmtDate(t.ts)}</div>`:''}</div>
+      ${txt}
       <div class="del-item" style="display:block" onclick="delMonthlyTask('${t.id}')">✕</div>
-    </div></div>`).join('');
+    </div></div>`;
+  }).join('');
   html += `<div class="store">
-    <div class="store-head"><div class="store-title" style="flex:1">📅 Monthly checklist · ${esc(monthLabel(m.periodKey))}</div><span class="add-item-btn" onclick="addMonthlyTaskPrompt()" title="Add task">＋</span><span class="store-count">${doneCount}/${(m.tasks||[]).length}</span></div>
+    <div class="store-head"><div class="store-title" style="flex:1">📅 Monthly checklist · ${esc(monthLabel(m.periodKey))}</div><span class="add-item-btn" onclick="addMonthlyHere()" title="Add task">＋</span><span class="store-count">${doneCount}/${(m.tasks||[]).length}</span></div>
     <div class="items">${tasks||'<div class="item"><div class="txt note">Tap ＋ to add tasks that repeat every month (they reset on the 1st).</div></div>'}</div>
   </div>`;
   html += renderHistoryHTML();
@@ -924,12 +980,12 @@ function buyItem(sid,iid){
   const s=findStore(sid); if(!s) return; const x=(s.items||[]).find(i=>i.id===iid); if(!x) return;
   const k=monthKey(); data.bought=data.bought||{}; data.bought[k]=data.bought[k]||[];
   data.bought[k].unshift({name:x.n, note:x.d||'', ts:Date.now(), from:s.name});
-  s.items=s.items.filter(i=>i.id!==iid);
+  tomb(iid); s.items=s.items.filter(i=>i.id!==iid);
   saveLocal(); render(); schedulePush();
 }
 function addMonthlyTask(input){ const val=(input.value||'').trim(); if(!val) return; ensureExtras(data); data.monthly.tasks.push({id:uid(), n:val, done:false, ts:0}); input.value=''; saveLocal(); render(); schedulePush(); }
-function toggleMonthly(id){ const t=(data.monthly.tasks||[]).find(x=>x.id===id); if(!t) return; t.done=!t.done; t.ts=t.done?Date.now():0; saveLocal(); render(); schedulePush(); }
-function delMonthlyTask(id){ data.monthly.tasks=(data.monthly.tasks||[]).filter(x=>x.id!==id); saveLocal(); render(); schedulePush(); }
+function toggleMonthly(id){ const t=(data.monthly.tasks||[]).find(x=>x.id===id); if(!t) return; t.done=!t.done; t.ts=t.done?Date.now():0; t.mt=Date.now(); saveLocal(); render(); schedulePush(); }
+function delMonthlyTask(id){ tomb(id); data.monthly.tasks=(data.monthly.tasks||[]).filter(x=>x.id!==id); saveLocal(); render(); schedulePush(); }
 function esc(s){ return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
 function renderLog(){
@@ -961,7 +1017,7 @@ function renderLog(){
 }
 
 function findStore(sid){ return data.stores.find(s=>s.id===sid); }
-function toggle(sid,iid){ const x=findStore(sid).items.find(i=>i.id===iid); x.done=!x.done; x.ts=Date.now(); saveLocal(); render(); schedulePush(); }
+function toggle(sid,iid){ const x=findStore(sid).items.find(i=>i.id===iid); x.done=!x.done; x.ts=Date.now(); x.mt=Date.now(); saveLocal(); render(); schedulePush(); }
 function toggleStore(sid){ const s=findStore(sid); s.collapsed=!s.collapsed; saveLocal(); render(); schedulePush(); }
 function collapseAll(){ const anyOpen=data.stores.some(s=>!s.collapsed); data.stores.forEach(s=>s.collapsed=anyOpen); saveLocal(); render(); schedulePush(); }
 function collapseView(){ (data.stores||[]).forEach(s=>{ if(!KEEP_SECTIONS.some(k=>k.id===s.id)) s.collapsed=true; }); }
@@ -975,8 +1031,15 @@ function addItemPrompt(sid){
   askInput('Add to '+label, '', v=>{ v=(v||'').trim(); if(!v) return; s.items.push(it(v)); saveLocal(); render(); schedulePush(); if(cloudOn && typeof push==='function') push(); }, {placeholder:'Item name', okText:'Add'});
 }
 function addMonthlyTaskPrompt(){ ensureExtras(data); askInput('Add monthly task', '', v=>{ v=(v||'').trim(); if(!v) return; data.monthly.tasks.push({id:uid(), n:v, done:false, ts:0}); saveLocal(); render(); schedulePush(); if(cloudOn && typeof push==='function') push(); }, {placeholder:'e.g. Pay rent', okText:'Add'}); }
-function delItem(sid,iid){ const s=findStore(sid); s.items=s.items.filter(i=>i.id!==iid); saveLocal(); render(); schedulePush(); }
-function renameItem(sid,iid){ const x=findStore(sid).items.find(i=>i.id===iid); askInput('Rename item', x.n, v=>{ x.n=(v||'').trim()||x.n; saveLocal(); render(); schedulePush(); }, {okText:'Save'}); }
+/* ---- Inline add (no popup): a blank row appears at the top, type + Enter to save & keep adding ---- */
+function addItemHere(sid){ ensureSections(data); const s=findStore(sid); if(!s) return; if(s.collapsed) s.collapsed=false; const x=it(''); s.items.unshift(x); newItemId=x.id; render(); setTimeout(()=>{ const el=document.getElementById('newrow-input'); if(el) el.focus(); },50); }
+function commitNewItem(sid,id,val){ const s=findStore(sid); if(!s) return; const x=(s.items||[]).find(i=>i.id===id); if(!x) return; val=(val||'').trim(); if(newItemId===id) newItemId=null; if(!val){ s.items=s.items.filter(i=>i.id!==id); render(); return; } x.n=val; x.mt=Date.now(); saveLocal(); render(); schedulePush(); }
+function onNewItemKey(e,sid,id){ if(e.key==='Enter'){ e.preventDefault(); const v=(e.target.value||'').trim(); commitNewItem(sid,id,e.target.value); if(v) addItemHere(sid); } else if(e.key==='Escape'){ const s=findStore(sid); if(s) s.items=s.items.filter(i=>i.id!==id); newItemId=null; render(); } }
+function addMonthlyHere(){ ensureExtras(data); const t={id:uid(), n:'', done:false, ts:0, mt:Date.now()}; data.monthly.tasks.unshift(t); newTaskId=t.id; render(); setTimeout(()=>{ const el=document.getElementById('newtask-input'); if(el) el.focus(); },50); }
+function commitNewTask(id,val){ const t=(data.monthly.tasks||[]).find(x=>x.id===id); if(!t) return; val=(val||'').trim(); if(newTaskId===id) newTaskId=null; if(!val){ data.monthly.tasks=data.monthly.tasks.filter(x=>x.id!==id); render(); return; } t.n=val; t.mt=Date.now(); saveLocal(); render(); schedulePush(); }
+function onNewTaskKey(e,id){ if(e.key==='Enter'){ e.preventDefault(); const v=(e.target.value||'').trim(); commitNewTask(id,e.target.value); if(v) addMonthlyHere(); } else if(e.key==='Escape'){ data.monthly.tasks=(data.monthly.tasks||[]).filter(x=>x.id!==id); newTaskId=null; render(); } }
+function delItem(sid,iid){ const s=findStore(sid); if(!s) return; tomb(iid); s.items=s.items.filter(i=>i.id!==iid); saveLocal(); render(); schedulePush(); }
+function renameItem(sid,iid){ const x=findStore(sid).items.find(i=>i.id===iid); askInput('Rename item', x.n, v=>{ x.n=(v||'').trim()||x.n; x.mt=Date.now(); saveLocal(); render(); schedulePush(); }, {okText:'Save'}); }
 function renameStore(sid){ const s=findStore(sid); askInput('Rename section', s.name, v=>{ s.name=(v||'').trim()||s.name; saveLocal(); render(); schedulePush(); }, {okText:'Save'}); }
 function delStore(sid){ const s=findStore(sid); askConfirm('Delete section?', 'Delete "'+s.name+'" and all its items? This cannot be undone.', ()=>{ data.stores=data.stores.filter(x=>x.id!==sid); saveLocal(); render(); schedulePush(); }); }
 function addStore(){ askInput('New section name', '', v=>{ const name=(v||'').trim(); if(!name) return; data.stores.push({id:uid(), name:name, collapsed:true, items:[]}); saveLocal(); render(); schedulePush(); }, {placeholder:'e.g. 🥩 Butcher', okText:'Add section'}); }

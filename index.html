@@ -626,6 +626,8 @@ function adoptRemote(remote){
   if((remote.updatedAt||0) > (data.updatedAt||0)){
     if(!remote.submissions) remote.submissions=[];
     ensureSections(remote); ensureExtras(remote);
+    const col={}; (data.stores||[]).forEach(s=>col[s.id]=s.collapsed);
+    (remote.stores||[]).forEach(s=>{ if(col.hasOwnProperty(s.id)) s.collapsed=col[s.id]; });
     data = remote; try{ localStorage.setItem(LKEY, JSON.stringify(data)); }catch(e){} render(); return true;
   }
   return false;
@@ -644,6 +646,7 @@ function mergeData(local, remote){
     let ms = merged.stores.find(s=>s.id===ls.id);
     if(!ms){ ms={id:ls.id,name:ls.name,collapsed:ls.collapsed,items:[]}; merged.stores.push(ms); }
     if(localNewer) ms.name = ls.name;
+    ms.collapsed = ls.collapsed;   // expand/collapse is a per-device view preference — keep local
     const byId={}; ms.items.forEach(i=>byId[i.id]=i);
     (ls.items||[]).forEach(li=>{
       const mi=byId[li.id];

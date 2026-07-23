@@ -57,7 +57,7 @@
   .sync{ font-size:11px; font-weight:600; padding:4px 9px; border-radius:20px; background:rgba(255,255,255,.18); white-space:nowrap; }
   .sync.off{ background:#b91c1c; }
   .sub{ font-size:12.5px; opacity:.85; margin-top:2px; }
-  .progwrap{ margin-top:12px; }
+  .progwrap{ display:none; }
   .progbar{ height:8px; background:rgba(255,255,255,.25); border-radius:6px; overflow:hidden; }
   .progfill{ height:100%; background:#fff; width:0%; transition:width .3s ease; border-radius:6px; }
   .progtext{ font-size:12px; margin-top:5px; opacity:.9; }
@@ -626,6 +626,8 @@ function adoptRemote(remote){
   if((remote.updatedAt||0) > (data.updatedAt||0)){
     if(!remote.submissions) remote.submissions=[];
     ensureSections(remote); ensureExtras(remote);
+    const col={}; (data.stores||[]).forEach(s=>col[s.id]=s.collapsed);
+    (remote.stores||[]).forEach(s=>{ if(col.hasOwnProperty(s.id)) s.collapsed=col[s.id]; });
     data = remote; try{ localStorage.setItem(LKEY, JSON.stringify(data)); }catch(e){} render(); return true;
   }
   return false;
@@ -644,6 +646,7 @@ function mergeData(local, remote){
     let ms = merged.stores.find(s=>s.id===ls.id);
     if(!ms){ ms={id:ls.id,name:ls.name,collapsed:ls.collapsed,items:[]}; merged.stores.push(ms); }
     if(localNewer) ms.name = ls.name;
+    ms.collapsed = ls.collapsed;   // expand/collapse is a per-device view preference — keep local
     const byId={}; ms.items.forEach(i=>byId[i.id]=i);
     (ls.items||[]).forEach(li=>{
       const mi=byId[li.id];
